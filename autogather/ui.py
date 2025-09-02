@@ -166,7 +166,13 @@ class App:
             self.screen = Screen(monitor_index=mon_idx)
 
         # Запуск воркера
-        self.worker = Worker(self.screen, self.ts_f, self.ts_g, self.ts_s, self.want_gathering.get(), hwnd=hwnd)
+        self.worker = Worker(
+            self.screen,
+            self.ts_f, self.ts_g, self.ts_s,
+            self.want_gathering.get(),
+            hwnd=hwnd,
+            resource_dir=self._name_to_path[name]  # <--- ВАЖНО
+        )
         self.worker.start()
         self.btn_start.configure(state="disabled")
         self.btn_stop.configure(state="normal")

@@ -4,7 +4,7 @@ import re
 
 import cv2
 
-from .config import IMG_EXTS, RESOURCE_NAME_MAP, DEBUG_MATCHES
+from .config import IMG_EXTS, RESOURCE_NAME_MAP, DEBUG_MATCHES, RESOURCE_DIRNAME
 
 logger = logging.getLogger(__name__)
 
@@ -121,6 +121,15 @@ class TemplateSet:
 
         return best
 
+def load_resource_object_dir(resource_dir: str):
+    """
+    Загружает TemplateSet для поиска самого объекта ресурса.
+    Ожидается подпапка 'resource' внутри ресурса.
+    """
+    obj_dir = os.path.join(resource_dir, RESOURCE_DIRNAME)
+    if not os.path.isdir(obj_dir):
+        return None
+    return TemplateSet(obj_dir)
 
 def load_resource_dir(resource_dir: str):
     if not os.path.isdir(resource_dir):
@@ -135,3 +144,4 @@ def load_resource_dir(resource_dir: str):
     if missing:
         raise FileNotFoundError(f"В {resource_dir} нет подпапок: {', '.join(missing)}")
     return TemplateSet(dir_f), TemplateSet(dir_g), TemplateSet(dir_s)
+
