@@ -1,0 +1,5 @@
+pydirectinput
+pyautogui
+mss
+numpy
+opencv-python
