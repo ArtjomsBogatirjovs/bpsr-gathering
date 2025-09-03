@@ -100,6 +100,8 @@ class Worker(threading.Thread):
 
     # ---- main loop ----
     def run(self):
+        self.check_f_and_perform()
+
         while not self._stop.is_set():
             frame = self.screen.grab_bgr()
             if frame is None:
@@ -119,71 +121,13 @@ class Worker(threading.Thread):
                 dy = wp.y - self.pos_y
                 dx_step, dy_step = self.nav.approach_by_distance(dx, dy)
                 self._apply_step(dx_step, dy_step)
-                # если дошли — дальше обычная логика сама увидит подсказки и нажмёт F
-                # а если подсказок нет — на след. итерации попробуем поискать объект/нуджнуть камеру
-                continue
-
-            # 1) СНАЧАЛА смотрим подсказки (добыча в приоритете, если уже рядом)
-            hit_f = self.ts_focus.best_match(roi, SCALES, MATCH_THRESHOLD) if self.ts_focus.tmps else None
-            hit_g = self.ts_gath.best_match(roi, SCALES, MATCH_THRESHOLD) if self.ts_gath.tmps else None
-            hit_s = self.ts_sel.best_match(roi, SCALES, MATCH_THRESHOLD) if self.ts_sel.tmps else None
-
-            has_any_prompt = bool(hit_f or hit_g)
-
-            if has_any_prompt:
-                # ... здесь оставь твою логику:
-                # - если cooldown — подождать
-                # - если want_gathering выключен — жмём F сразу
-                # - если включен — выравниваем [F] к Gathering (несколько легких прокруток); жмём F; hold_after_press()
-                # - и continue
-                # пример:
-                if not self.cooldown_ok():
-                    self.state = "cooldown"
-                    time.sleep(0.05)
-                    continue
-
-                if not self.want_gathering:
-                    self.state = "press F (any)"
-                    press_key('f')
-                    self.hold_after_press()
-                    self.waypoints.add_or_update(self.pos_x, self.pos_y)
-                    continue
-
-                # нужен Gathering
-                if hit_g and hit_s and self._selector_on_gathering(hit_f, hit_g, hit_s):
-                    self.state = "press F (Gathering)"
-                    press_key('f')
-                    self.hold_after_press()
-                    self.waypoints.add_or_update(self.pos_x, self.pos_y)
-                    continue
-
-                # иначе несколько мягких прокруток
-                steps = 0
-                aligned = hit_g and hit_s and self._selector_on_gathering(hit_f, hit_g, hit_s)
-                while not aligned and steps < MAX_SCROLL_STEPS and not self._stop.is_set():
-                    self.state = f"scroll align {steps + 1}/{MAX_SCROLL_STEPS}"
+                if self.want_gathering:
                     scroll_once(SCROLL_UNIT)
-                    time.sleep(SCROLL_DELAY)
-                    frame = self.screen.grab_bgr()
-                    if frame is None: break
-                    gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-                    roi, _ = self._roi(gray)
-                    hit_f = self.ts_focus.best_match(roi, SCALES, MATCH_THRESHOLD) if self.ts_focus.tmps else None
-                    hit_g = self.ts_gath.best_match(roi, SCALES, MATCH_THRESHOLD) if self.ts_gath.tmps else None
-                    hit_s = self.ts_sel.best_match(roi, SCALES, MATCH_THRESHOLD) if self.ts_sel.tmps else None
-                    aligned = hit_g and hit_s and self._selector_on_gathering(hit_f, hit_g, hit_s)
-                    steps += 1
-
-                if aligned:
-                    self.state = "press F (Gathering)"
-                    press_key('f')
-                    self.hold_after_press()
-                    self.waypoints.add_or_update(self.pos_x, self.pos_y)
-                    continue
-                else:
-                    self.state = "align failed"
-                    time.sleep(0.12)
-                    continue
+                self.state = "press F (Gathering)"
+                press_key('f')
+                self.hold_after_press()
+                self.waypoints.add_or_update(self.pos_x, self.pos_y)
+                continue
 
             # 2) ЕСЛИ подсказок НЕТ — ищем саму руду на всём кадре по отдельным шаблонам
             if self.ts_resource is not None:
@@ -200,13 +144,74 @@ class Worker(threading.Thread):
                 dx = cx - W // 2
                 dy = cy - H // 2
                 self.state = f"approach resource dx={dx}, dy={dy}"
-                # self.nav.move_towards_point(dx, dy)
                 dx_step, dy_step = self.nav.approach_by_distance(dx, dy)
                 self._apply_step(dx_step, dy_step)
-                # после шага цикл заново проверит подсказки и т.п.
+                self.check_f_and_perform()
                 continue
 
-            # 3) Ни подсказок, ни руды — слегка "подтолкнуть" камеру по X
-            self.state = "nudge"
-            move_mouse_rel(NUDGE_MOUSE_X_PX, 0)
+            time.sleep(0.2)
+
+    def check_f_and_perform(self):
+        hit_f = self.ts_focus.best_match(roi, SCALES, MATCH_THRESHOLD) if self.ts_focus.tmps else None
+        hit_g = self.ts_gath.best_match(roi, SCALES, MATCH_THRESHOLD) if self.ts_gath.tmps else None
+        hit_s = self.ts_sel.best_match(roi, SCALES, MATCH_THRESHOLD) if self.ts_sel.tmps else None
+        has_any_prompt = bool(hit_f or hit_g)
+        if has_any_prompt:
+            if self.want_gathering:
+                scroll_once(SCROLL_UNIT)
+            self._handle_prompt(hit_f, hit_g, hit_s)
+
+    def _handle_prompt(self, hit_f, hit_g, hit_s) -> bool:
+        """
+        Обработка ситуации, когда подсказки (Focused/Gathering) найдены.
+        Возвращает True, если мы что-то сделали (жали F / скроллили / подождали)
+        и цикл run() должен сразу continue.
+        """
+        if not self.cooldown_ok():
+            self.state = "cooldown"
+            time.sleep(0.05)
+            return True
+
+        if not self.want_gathering:
+            self.state = "press F (any)"
+            press_key('f')
+            self.hold_after_press()
+            self.waypoints.add_or_update(self.pos_x, self.pos_y)
+            return True
+
+        # нужен Gathering
+        if hit_g and hit_s and self._selector_on_gathering(hit_f, hit_g, hit_s):
+            self.state = "press F (Gathering)"
+            press_key('f')
+            self.hold_after_press()
+            self.waypoints.add_or_update(self.pos_x, self.pos_y)
+            return True
+
+        # иначе несколько мягких прокруток
+        steps = 0
+        aligned = hit_g and hit_s and self._selector_on_gathering(hit_f, hit_g, hit_s)
+        while not aligned and steps < MAX_SCROLL_STEPS and not self._stop.is_set():
+            self.state = f"scroll align {steps + 1}/{MAX_SCROLL_STEPS}"
+            scroll_once(SCROLL_UNIT)
+            time.sleep(SCROLL_DELAY)
+            frame = self.screen.grab_bgr()
+            if frame is None:
+                break
+            gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+            roi, _ = self._roi(gray)
+            hit_f = self.ts_focus.best_match(roi, SCALES, MATCH_THRESHOLD) if self.ts_focus.tmps else None
+            hit_g = self.ts_gath.best_match(roi, SCALES, MATCH_THRESHOLD) if self.ts_gath.tmps else None
+            hit_s = self.ts_sel.best_match(roi, SCALES, MATCH_THRESHOLD) if self.ts_sel.tmps else None
+            aligned = hit_g and hit_s and self._selector_on_gathering(hit_f, hit_g, hit_s)
+            steps += 1
+
+        if aligned:
+            self.state = "press F (Gathering)"
+            press_key('f')
+            self.hold_after_press()
+            self.waypoints.add_or_update(self.pos_x, self.pos_y)
+            return True
+        else:
+            self.state = "align failed"
             time.sleep(0.12)
+            return True

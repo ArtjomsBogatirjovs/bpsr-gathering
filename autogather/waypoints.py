@@ -5,7 +5,7 @@ import time
 from dataclasses import dataclass
 from typing import List, Optional, Tuple
 
-from .config import NODE_MIN_REVISIT_SEC, NODE_MERGE_RADIUS_PX, NODE_REACH_TOLERANCE_PX, NODE_MAX_CHASE_PX
+from .config import NODE_MIN_REVISIT_SEC, NODE_MERGE_RADIUS_PX
 
 
 @dataclass
@@ -58,11 +58,6 @@ class WaypointDB:
         for n in self.nodes:
             if now - n.last_collected < NODE_MIN_REVISIT_SEC:
                 continue
-            if NODE_MAX_CHASE_PX > 0:
-                dx = n.x - curx
-                dy = n.y - cury
-                if (dx * dx + dy * dy) ** 0.5 > NODE_MAX_CHASE_PX:
-                    continue
             d2 = (n.x - curx) ** 2 + (n.y - cury) ** 2
             if d2 < best_d2:
                 best, best_d2 = n, d2
@@ -78,6 +73,3 @@ class WaypointDB:
                 pass
 
         return best
-
-    def reached(self, curx: int, cury: int, node: Node) -> bool:
-        return ((node.x - curx) ** 2 + (node.y - cury) ** 2) ** 0.5 <= NODE_REACH_TOLERANCE_PX
