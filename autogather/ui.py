@@ -1,13 +1,18 @@
 # autogather/ui.py
+import logging
+import time
 import tkinter as tk
 from tkinter import ttk, messagebox
 from typing import Optional, Tuple, List
 
-from .config import RESOURCES_ROOT_DEFAULT
+from .config import RESOURCES_ROOT_DEFAULT, PITCH_OFFSET_DEFAULT
+from .input_sim import move_mouse_rel, move_mouse_abs
 from .screen import WindowScreen, Screen
 from .templates import scan_resources, load_resource_dir
 from .winutil import list_windows, bring_to_foreground, get_window_rect
 from .worker import Worker
+
+logger = logging.getLogger(__name__)
 
 
 # подобрать монитор по положению окна (fallback, если окно нельзя захватить напрямую)
@@ -33,6 +38,7 @@ class App:
         # --- состояние ---
         self.want_gathering = tk.BooleanVar(value=True)  # «Без стамины»
         self.resources_root = tk.StringVar(value=RESOURCES_ROOT_DEFAULT)
+        self.pitch_offset = tk.IntVar(value=PITCH_OFFSET_DEFAULT)
         self.status = tk.StringVar(value="Укажи папку resources, выбери ресурс и окно игры.")
 
         self._resources: List[Tuple[str, str]] = []  # (display_name, path)
@@ -65,19 +71,23 @@ class App:
                                                                                  pady=(6, 0))
 
         # Настройки
+        ttk.Label(frm, text="Отклонение по Y (px):").grid(row=3, column=0, sticky="w", pady=(6, 0))
+        ttk.Spinbox(frm, from_=0, to=8000, textvariable=self.pitch_offset, width=8) \
+            .grid(row=3, column=1, sticky="w", pady=(6, 0))
+
         ttk.Checkbutton(frm, text="Без стамины → нажимать только Gathering", variable=self.want_gathering) \
-            .grid(row=3, column=0, columnspan=4, sticky="w", pady=(6, 2))
+            .grid(row=4, column=0, columnspan=4, sticky="w", pady=(6, 2))
 
         # Кнопки управления
         self.btn_start = ttk.Button(frm, text="▶ Старт", command=self.start)
-        self.btn_start.grid(row=4, column=0, sticky="ew", pady=(10, 4))
+        self.btn_start.grid(row=5, column=0, sticky="ew", pady=(10, 4))
         self.btn_stop = ttk.Button(frm, text="■ Стоп", command=self.stop, state="disabled")
-        self.btn_stop.grid(row=4, column=1, sticky="ew", pady=(10, 4))
+        self.btn_stop.grid(row=5, column=1, sticky="ew", pady=(10, 4))
 
-        ttk.Label(frm, textvariable=self.status, foreground="#666").grid(row=5, column=0, columnspan=4, sticky="w",
+        ttk.Label(frm, textvariable=self.status, foreground="#666").grid(row=6, column=0, columnspan=4, sticky="w",
                                                                          pady=(8, 0))
         for c in range(1, 4):
-            frm.columnconfigure(c, weight=1)
+            frm.columsnconfigure(c, weight=1)
 
         # Инициализация
         self.rescan()
@@ -123,6 +133,31 @@ class App:
                 return h
         return None
 
+    def calibrate_pitch(self):
+        """Ставим курсор в центр окна игры, затем опускаем камеру на заданное кол-во пикселей мелкими шагами."""
+        try:
+            hwnd = self._selected_hwnd()
+            if not hwnd:
+                return
+            left, top, right, bottom = get_window_rect(hwnd)
+            cx = (left + right) // 2
+            cy = (top + bottom) // 2
+            logger.debug(
+                f"calibrate_pitch: hwnd={hwnd}, rect=({left},{top},{right},{bottom}), "
+                f"center=({cx},{cy}), offsetY={top}"
+            )
+
+            move_mouse_abs(cx, cy)
+            logger.debug(f"Moved mouse to absolute center ({cx},{cy})")
+            time.sleep(5)
+            move_mouse_rel(dx = 0,dy=top * 5)
+            time.sleep(5)
+            move_mouse_rel(dx = 0,dy=-int(self.pitch_offset.get() if hasattr(self, "pitch_offset") else PITCH_OFFSET_DEFAULT))
+            logger.debug(f"Moved mouse relative by ({0},-{top/4})")
+        except Exception:
+            logger.debug(f"Moved mouse relative by ({0},-{Exception})")
+            pass
+
     # -------- старт/стоп --------
     def start(self):
         if self.worker and self.worker.is_alive():
@@ -165,6 +200,8 @@ class App:
             mon_idx = choose_monitor_index_for_window(hwnd)
             self.screen = Screen(monitor_index=mon_idx)
 
+        #self.calibrate_pitch()
+
         # Запуск воркера
         self.worker = Worker(
             self.screen,
@@ -177,6 +214,7 @@ class App:
         self.btn_start.configure(state="disabled")
         self.btn_stop.configure(state="normal")
         self.status.set(f"Запущено: {name} | окно: {self._selected_win.get()}")
+        #self.stop()#TODO
 
     def stop(self):
         if self.worker:

@@ -11,9 +11,11 @@ RESOURCE_NAME_MAP = {
 AFTER_F_SLEEP = 7.0  # сек: «копаем» после нажатия F
 ACTION_COOLDOWN = 1  # сек: мин. пауза между попытками нажать F
 
+# ROI для подсказок [F] справа
+PROMPT_ROI = (0.65, 0.5, 0.77, 0.65)  # (x1_frac, y1_frac, x2_frac, y2_frac)
+
 # Матчинг подсказок
-ROI_RIGHT_FRACTION = 0.50  # правая часть экрана, где живут подсказки
-MATCH_THRESHOLD = 0.70
+MATCH_THRESHOLD = 0.7
 SCALES = [0.70, 0.80, 0.90, 1.00, 1.12, 1.25, 1.40]
 ALIGN_TOLERANCE = 16  # допуск (px) при сравнении расстояний [F] до строк
 
@@ -32,10 +34,10 @@ GAME_TITLE_KEYWORDS = ("blue", "protocol", "star", "resonance", "BPSR")
 DEBUG_MATCHES = True
 
 # ===== Поиск самого ресурса (объект) =====
-RESOURCE_THRESHOLD = 0.65   # порог для matchTemplate на картинках ресурса
+RESOURCE_THRESHOLD = 0.8   # порог для matchTemplate на картинках ресурса
 RESOURCE_DIRNAME   = "resource"  # подпапка внутри руды, где лежат картинки руды
 APPROACH_PAUSE     = 0.08   # пауза между шагами
-APPROACH_TOLERANCE = 40     # пикселей — считаем "дошли", если ресурс почти в центре
+APPROACH_TOLERANCE = 200     # пикселей — считаем "дошли", если ресурс почти в центре
 
 # ===== Калибровка бега по расстоянию в пикселях =====
 # Сколько миллисекунд удерживать клавишу на 1 пиксель смещения цели
@@ -49,3 +51,8 @@ APPROACH_MAX_MS = 3000      # максимум удержания за один 
 # ===== Память точек (узлов) =====
 NODE_MIN_REVISIT_SEC   = 30     # мин. время, после которого узел «снова доступен»
 NODE_MERGE_RADIUS_PX   = 60     # если новая точка близко к существующей — сливаем
+
+# Калибровка наклона камеры по Y (мышью)
+PITCH_OFFSET_DEFAULT = 100
+PITCH_STEP_PX        = 50
+PITCH_STEP_DELAY     = 0.010

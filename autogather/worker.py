@@ -5,12 +5,13 @@ import time
 import cv2
 
 from .config import (
-    ROI_RIGHT_FRACTION, SCALES, MATCH_THRESHOLD,
+    SCALES, MATCH_THRESHOLD,
     ACTION_COOLDOWN, AFTER_F_SLEEP, ALIGN_TOLERANCE,
     SCROLL_DELAY, SCROLL_UNIT, MAX_SCROLL_STEPS,
-    RESOURCE_THRESHOLD, NUDGE_MOUSE_X_PX
+    RESOURCE_THRESHOLD, PROMPT_ROI
 )
-from .input_sim import press_key, scroll_once, move_mouse_rel
+from .debug import save_roi_debug
+from .input_sim import press_key, scroll_once, press_keys
 from .navigator import Navigator
 from .templates import TemplateSet, load_resource_object_dir
 from .waypoints import WaypointDB
@@ -53,6 +54,8 @@ class Worker(threading.Thread):
         # навигация
         self.nav = Navigator()
 
+        self.y_teach = 0.5
+
     # ---- helpers ----
     def stop(self):
         self._stop.set()
@@ -70,9 +73,13 @@ class Worker(threading.Thread):
         return (y1 + y2) // 2
 
     def _roi(self, gray):
-        h, w = gray.shape[:2]
-        x0 = int(w * (1.0 - ROI_RIGHT_FRACTION))
-        return gray[:, x0:], x0
+        H, W = gray.shape[:2]
+        x1 = int(W * PROMPT_ROI[0])
+        y1 = int(H * PROMPT_ROI[1])
+        x2 = int(W * PROMPT_ROI[2])
+        y2 = int(H * PROMPT_ROI[3])
+        roi = gray[y1:y2, x1:x2]
+        return roi, (x1, y1, x2, y2)
 
     def _selector_on_gathering(self, hit_f, hit_g, hit_s):
         """True, если [F] ближе к Gathering, чем к Focused (с допуском)."""
@@ -97,6 +104,7 @@ class Worker(threading.Thread):
                 break
             self.state = f"mining… {left:.1f}s"
             time.sleep(min(0.2, left))
+        #aself.nav.approach_by_distance(-self.pos_x, -self.pos_y)
 
     # ---- main loop ----
     def run(self):
@@ -130,28 +138,63 @@ class Worker(threading.Thread):
                 continue
 
             # 2) ЕСЛИ подсказок НЕТ — ищем саму руду на всём кадре по отдельным шаблонам
-            if self.ts_resource is not None:
-                hit_obj = self.ts_resource.best_match(gray, SCALES, RESOURCE_THRESHOLD)
-            else:
-                hit_obj = None
 
+            hit_obj, dx, dy = self._measure_resource_offset()
+
+            steps = 5
             if hit_obj:
-                # нашли руду → двигаемся к ней
-                (x1, y1), (x2, y2) = hit_obj["box"]
-                cx = (x1 + x2) // 2
-                cy = (y1 + y2) // 2
-                H, W = gray.shape[:2]
-                dx = cx - W // 2
-                dy = cy - H // 2
-                self.state = f"approach resource dx={dx}, dy={dy}"
-                dx_step, dy_step = self.nav.approach_by_distance(dx, dy)
-                self._apply_step(dx_step, dy_step)
-                self.check_f_and_perform()
-                continue
+                for i in range(1, steps, 1):
+                    self.state = f"approach resource dx={dx}, dy={dy}"
+                    if i == 1:
+                        y_step = dy * self.y_teach
+                        x_step = dx * 1.25
+                        ignore_toller = False
+                    else:
+                        y_step = dy * (1 - self.y_teach) / steps
+                        x_step = 0
+                        ignore_toller = True
+
+                    dx_step, dy_step = self.nav.approach_by_distance(x_step, y_step, ignore_toller)
+                    self._apply_step(dx_step, dy_step)
+                    if self.check_f_and_perform():
+                        self.y_teach+= ((1 - self.y_teach) / steps) * i
+                        break
 
             time.sleep(0.2)
 
-    def check_f_and_perform(self):
+    def _hide_unhide_ui(self):
+        press_keys('ctrl', '\\')
+
+    def _measure_resource_offset(self):
+        """
+        Переизмерить смещение руды относительно центра кадра.
+        Возвращает (found: bool, dx: int, dy: int).
+        """
+        if not self.ts_resource:
+            return False, 0, 0
+        frame = self.screen.grab_bgr()
+        if frame is None:
+            return False, 0, 0
+        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        self._hide_unhide_ui()
+        hit = self.ts_resource.best_match(gray, SCALES, RESOURCE_THRESHOLD)
+        self._hide_unhide_ui()
+        if not hit:
+            return False, 0, 0
+        (x1, y1), (x2, y2) = hit["box"]
+        cx = (x1 + x2) // 2
+        cy = (y1 + y2) // 2
+        H, W = gray.shape[:2]
+        dx = cx - W // 2
+        dy = cy - H // 2
+        return True, dx, dy
+
+    def check_f_and_perform(self) -> bool:
+        frame = self.screen.grab_bgr()
+        if frame is None:
+            return False
+        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        roi, _ = self._roi(gray)
         hit_f = self.ts_focus.best_match(roi, SCALES, MATCH_THRESHOLD) if self.ts_focus.tmps else None
         hit_g = self.ts_gath.best_match(roi, SCALES, MATCH_THRESHOLD) if self.ts_gath.tmps else None
         hit_s = self.ts_sel.best_match(roi, SCALES, MATCH_THRESHOLD) if self.ts_sel.tmps else None
@@ -159,7 +202,8 @@ class Worker(threading.Thread):
         if has_any_prompt:
             if self.want_gathering:
                 scroll_once(SCROLL_UNIT)
-            self._handle_prompt(hit_f, hit_g, hit_s)
+            return self._handle_prompt(hit_f, hit_g, hit_s)
+        return has_any_prompt
 
     def _handle_prompt(self, hit_f, hit_g, hit_s) -> bool:
         """
