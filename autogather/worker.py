@@ -4,39 +4,30 @@ import time
 
 import cv2
 
+from .AspectRatio import AspectRatio
 from .config import (
     SCALES, MATCH_THRESHOLD,
     ACTION_COOLDOWN, AFTER_F_SLEEP, ALIGN_TOLERANCE,
     SCROLL_DELAY, SCROLL_UNIT, MAX_SCROLL_STEPS,
     RESOURCE_THRESHOLD, PROMPT_ROI
 )
-from .debug import save_roi_debug
-from .input_sim import press_key, scroll_once, press_keys
+from .input_sim import press_key, scroll_once, _hide_unhide_ui
 from .navigator import Navigator
-from .templates import TemplateSet, load_resource_object_dir
+from .screen import _get_roi_f
+from .templates import TemplateSet
 from .waypoints import WaypointDB
 
 
 class Worker(threading.Thread):
-    """
-    Правила:
-      • Пока на экране нет НИ одной надписи (Focused/Gathering) — просто ждём.
-      • Если «Без стамины» выключено — жмём F, как только видна хотя бы одна надпись.
-      • Если «Без стамины» включено — жмём F ТОЛЬКО когда [F] выровнен с Gathering.
-        Если [F] не видно — делаем короткие попытки мягко прокрутить (до MAX_SCROLL_STEPS)
-        и каждый раз перепроверяем. Подсказки исчезли — прекращаем попытку и ждём снова.
-    """
-
     def __init__(self, screen, ts_focus: TemplateSet, ts_gath: TemplateSet,
-                 ts_sel: TemplateSet, want_gathering: bool,
-                 hwnd: int | None = None, resource_dir: str | None = None):
+                 ts_sel: TemplateSet, ts_res: TemplateSet, want_gathering: bool, ratio: AspectRatio, roi=PROMPT_ROI):
         super().__init__(daemon=True)
         self.screen = screen
         self.ts_focus = ts_focus
         self.ts_gath = ts_gath
         self.ts_sel = ts_sel
+        self.ts_resource = ts_res
         self.want_gathering = want_gathering
-        self.target_hwnd = hwnd
         self._stop = threading.Event()
         self.state = "idle"
         self._last_action = 0.0
@@ -48,13 +39,12 @@ class Worker(threading.Thread):
         # память узлов
         self.waypoints = WaypointDB()
 
-        # шаблоны для поиска САМОГО объекта ресурса
-        self.ts_resource = load_resource_object_dir(resource_dir) if resource_dir else None
-
         # навигация
         self.nav = Navigator()
 
         self.y_teach = 0.5
+        self.roi_prompt = roi
+        self.ratio = ratio
 
     # ---- helpers ----
     def stop(self):
@@ -71,15 +61,6 @@ class Worker(threading.Thread):
     def _y_center(box):
         (x1, y1), (x2, y2) = box
         return (y1 + y2) // 2
-
-    def _roi(self, gray):
-        H, W = gray.shape[:2]
-        x1 = int(W * PROMPT_ROI[0])
-        y1 = int(H * PROMPT_ROI[1])
-        x2 = int(W * PROMPT_ROI[2])
-        y2 = int(H * PROMPT_ROI[3])
-        roi = gray[y1:y2, x1:x2]
-        return roi, (x1, y1, x2, y2)
 
     def _selector_on_gathering(self, hit_f, hit_g, hit_s):
         """True, если [F] ближе к Gathering, чем к Focused (с допуском)."""
@@ -104,22 +85,17 @@ class Worker(threading.Thread):
                 break
             self.state = f"mining… {left:.1f}s"
             time.sleep(min(0.2, left))
-        #aself.nav.approach_by_distance(-self.pos_x, -self.pos_y)
+        # aself.nav.approach_by_distance(-self.pos_x, -self.pos_y)
 
     # ---- main loop ----
     def run(self):
         self.check_f_and_perform()
 
         while not self._stop.is_set():
-            frame = self.screen.grab_bgr()
-            if frame is None:
-                self.state = "wait frame"
-                time.sleep(0.10)
+            roi, _ = _get_roi_f(self.screen, self.ratio, self.roi_prompt)
+            if roi is None:
+                self.state = "ROI focus error"
                 continue
-
-            gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-            # ROI для подсказок справа
-            roi, _ = self._roi(gray)
 
             # 0) Если есть «готовый» узел — бежим к нему напрямую (без поиска)
             wp = self.waypoints.next_available(self.pos_x, self.pos_y)
@@ -157,13 +133,10 @@ class Worker(threading.Thread):
                     dx_step, dy_step = self.nav.approach_by_distance(x_step, y_step, ignore_toller)
                     self._apply_step(dx_step, dy_step)
                     if self.check_f_and_perform():
-                        self.y_teach+= ((1 - self.y_teach) / steps) * i
+                        self.y_teach += ((1 - self.y_teach) / steps) * i
                         break
 
             time.sleep(0.2)
-
-    def _hide_unhide_ui(self):
-        press_keys('ctrl', '\\')
 
     def _measure_resource_offset(self):
         """
@@ -176,9 +149,9 @@ class Worker(threading.Thread):
         if frame is None:
             return False, 0, 0
         gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-        self._hide_unhide_ui()
+        _hide_unhide_ui()
         hit = self.ts_resource.best_match(gray, SCALES, RESOURCE_THRESHOLD)
-        self._hide_unhide_ui()
+        _hide_unhide_ui()
         if not hit:
             return False, 0, 0
         (x1, y1), (x2, y2) = hit["box"]
@@ -190,11 +163,9 @@ class Worker(threading.Thread):
         return True, dx, dy
 
     def check_f_and_perform(self) -> bool:
-        frame = self.screen.grab_bgr()
-        if frame is None:
+        roi, _ = _get_roi_f(self.screen, self.ratio, self.roi_prompt)
+        if roi is None:
             return False
-        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-        roi, _ = self._roi(gray)
         hit_f = self.ts_focus.best_match(roi, SCALES, MATCH_THRESHOLD) if self.ts_focus.tmps else None
         hit_g = self.ts_gath.best_match(roi, SCALES, MATCH_THRESHOLD) if self.ts_gath.tmps else None
         hit_s = self.ts_sel.best_match(roi, SCALES, MATCH_THRESHOLD) if self.ts_sel.tmps else None
@@ -238,11 +209,9 @@ class Worker(threading.Thread):
             self.state = f"scroll align {steps + 1}/{MAX_SCROLL_STEPS}"
             scroll_once(SCROLL_UNIT)
             time.sleep(SCROLL_DELAY)
-            frame = self.screen.grab_bgr()
-            if frame is None:
+            roi, _ = _get_roi_f(self.screen, self.ratio, self.roi_prompt)
+            if roi is None:
                 break
-            gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-            roi, _ = self._roi(gray)
             hit_f = self.ts_focus.best_match(roi, SCALES, MATCH_THRESHOLD) if self.ts_focus.tmps else None
             hit_g = self.ts_gath.best_match(roi, SCALES, MATCH_THRESHOLD) if self.ts_gath.tmps else None
             hit_s = self.ts_sel.best_match(roi, SCALES, MATCH_THRESHOLD) if self.ts_sel.tmps else None

@@ -1,36 +1,12 @@
 import threading
 
+import cv2
 import numpy as np
 from mss import mss
 
+from .AspectRatio import AspectRatio
+from .config import PROMPT_ROI
 from .winutil import get_window_rect
-
-
-class Screen:
-    """Захват монитора целиком (fallback)."""
-
-    def __init__(self, monitor_index: int = 1):
-        self.monitor_index = int(monitor_index)
-        self._tls = threading.local()
-
-    def _sct(self):
-        if not hasattr(self._tls, "sct"):
-            self._tls.sct = mss()
-        return self._tls.sct
-
-    def _mon(self):
-        s = self._sct()
-        return s.monitors[self.monitor_index] if len(s.monitors) > self.monitor_index else s.monitors[0]
-
-    def grab_bgr(self):
-        s = self._sct();
-        m = self._mon()
-        img = s.grab(m)
-        return np.array(img)[:, :, :3]
-
-    def dims(self):
-        m = self._mon()
-        return m["width"], m["height"]
 
 
 class WindowScreen:
@@ -57,3 +33,51 @@ class WindowScreen:
     def dims(self):
         left, top, right, bottom = get_window_rect(self.hwnd)
         return (right - left), (bottom - top)
+
+
+def roi_convert(roi: tuple[float, float, float, float], x_ratio: int, y_ratio: int) -> tuple[
+    float, float, float, float]:
+    """
+    Конвертирует ROI из 16:9 в новый аспект (например, 21:9).
+    Сохраняем прямоугольник по центру экрана: добавленные поля по бокам
+    равномерно распределяются.
+    """
+    x1, y1, x2, y2 = roi
+
+    w_from, h_from = 16, 9
+    w_to, h_to = x_ratio, y_ratio
+
+    # абсолютные "условные" координаты
+    X1 = x1 * w_from
+    X2 = x2 * w_from
+
+    # смещение (добавленное пространство слева)
+    offset = (w_to - w_from) / 2
+
+    # нормализация в новую ширину
+    x1_new = (X1 + offset) / w_to
+    x2_new = (X2 + offset) / w_to
+
+    # высота: если одинаковая, не меняем
+    if h_from == h_to:
+        y1_new, y2_new = y1, y2
+    else:
+        y1_new = (y1 * h_from) / h_to
+        y2_new = (y2 * h_from) / h_to
+
+    return x1_new, y1_new, x2_new, y2_new
+
+
+def _get_roi_f(screen: WindowScreen, ratio: AspectRatio, roi_promt = PROMPT_ROI):
+    frame = screen.grab_bgr()
+    if frame is None:
+        return None
+    gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+    H, W = gray.shape[:2]
+    x1_k, y1_k, x2_k, y2_k = roi_convert((roi_promt[0], roi_promt[1], roi_promt[2], roi_promt[3]), ratio.x, ratio.y)
+    x1 = int(W * x1_k)
+    y1 = int(H * y1_k)
+    x2 = int(W *  x2_k)
+    y2 = int(H * y2_k)
+    roi = gray[y1:y2, x1:x2]
+    return roi, (x1, y1, x2, y2)

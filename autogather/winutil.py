@@ -1,5 +1,6 @@
 # Минимальные утилиты WinAPI: перечисление окон, титулы, геометрия, поднять в фокус
 import ctypes as ct
+import logging
 from ctypes import wintypes as wt
 
 user32 = ct.WinDLL("user32", use_last_error=True)
@@ -92,3 +93,47 @@ def bring_to_foreground(hwnd: int):
     else:
         user32.SetForegroundWindow(hwnd)
     user32.SetFocus(hwnd)
+
+logger = logging.getLogger(__name__)
+
+def enable_dpi_awareness() -> str:
+    """
+    Включает DPI-awareness процесса. Возвращает строку с тем, какой способ сработал.
+    Пишет подробные логи, чтобы было видно, на каком шаге что-то пошло не так.
+    """
+    # Попытка 1: Win10+ Per-Monitor v2
+    try:
+        # DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2 = -4
+        ctx = ct.c_void_p(-4 & 0xFFFFFFFFFFFFFFFF)  # безопасно для 64/32 бит
+        res = user32.SetProcessDpiAwarenessContext(ctx)
+        if res:  # non-zero == success
+            logger.info("DPI: SetProcessDpiAwarenessContext(PER_MONITOR_AWARE_V2) — OK")
+            return "PerMonitorV2"
+        else:
+            # иногда возвращает 0 при уже включённом DPI-aware; логируем код ошибки
+            err = ct.GetLastError()
+            logger.debug(f"DPI: SetProcessDpiAwarenessContext returned 0 (GetLastError={err})")
+    except Exception as e:
+        logger.debug(f"DPI: SetProcessDpiAwarenessContext not available: {e!r}")
+
+    # Попытка 2: Win 8.1+ Per-Monitor
+    try:
+        shcore = ct.windll.shcore
+        # PROCESS_PER_MONITOR_DPI_AWARE = 2
+        hr = shcore.SetProcessDpiAwareness(2)
+        if hr == 0:  # S_OK
+            logger.info("DPI: SetProcessDpiAwareness(PER_MONITOR) — OK")
+            return "PerMonitor"
+        else:
+            logger.debug(f"DPI: SetProcessDpiAwareness returned HR=0x{hr:08X}")
+    except Exception as e:
+        logger.debug(f"DPI: SetProcessDpiAwareness not available: {e!r}")
+
+    # Попытка 3: Старый способ (System DPI)
+    try:
+        ok = user32.SetProcessDPIAware()
+        logger.info(f"DPI: SetProcessDPIAware(System) — {'OK' if ok else 'already set?'}")
+        return "System"
+    except Exception as e:
+        logger.warning(f"DPI: SetProcessDPIAware failed: {e!r}")
+        return "None"         # System DPI (fallback)

@@ -12,7 +12,7 @@ AFTER_F_SLEEP = 7.0  # сек: «копаем» после нажатия F
 ACTION_COOLDOWN = 1  # сек: мин. пауза между попытками нажать F
 
 # ROI для подсказок [F] справа
-PROMPT_ROI = (0.65, 0.5, 0.77, 0.65)  # (x1_frac, y1_frac, x2_frac, y2_frac)
+PROMPT_ROI = (0.65, 0.49, 0.85, 0.62)  # (x1_frac, y1_frac, x2_frac, y2_frac)
 
 # Матчинг подсказок
 MATCH_THRESHOLD = 0.7
@@ -29,13 +29,13 @@ IMG_EXTS = (".png", ".jpg", ".jpeg", ".bmp", ".webp")
 
 # Автопоиск окна: ключевые слова в заголовке
 GAME_TITLE_KEYWORDS = ("blue", "protocol", "star", "resonance", "BPSR")
+REQUIRED_FOLDERS = ("focused", "gathering", "selector", "resource")
 
 # Логирование совпадений
 DEBUG_MATCHES = True
 
 # ===== Поиск самого ресурса (объект) =====
 RESOURCE_THRESHOLD = 0.8   # порог для matchTemplate на картинках ресурса
-RESOURCE_DIRNAME   = "resource"  # подпапка внутри руды, где лежат картинки руды
 APPROACH_PAUSE     = 0.08   # пауза между шагами
 APPROACH_TOLERANCE = 200     # пикселей — считаем "дошли", если ресурс почти в центре
 

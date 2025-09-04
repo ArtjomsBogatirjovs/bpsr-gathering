@@ -5,10 +5,12 @@ import tkinter as tk
 from tkinter import ttk, messagebox
 from typing import Optional, Tuple, List
 
-from .config import RESOURCES_ROOT_DEFAULT, PITCH_OFFSET_DEFAULT
+from .AspectRatio import AspectRatio
+from .config import PITCH_OFFSET_DEFAULT, PROMPT_ROI
+from .debug import save_roi_debug
+from .folder_utils import scan_resources, load_resource_dir
 from .input_sim import move_mouse_rel, move_mouse_abs
-from .screen import WindowScreen, Screen
-from .templates import scan_resources, load_resource_dir
+from .screen import WindowScreen, _get_roi_f
 from .winutil import list_windows, bring_to_foreground, get_window_rect
 from .worker import Worker
 
@@ -37,11 +39,9 @@ class App:
 
         # --- состояние ---
         self.want_gathering = tk.BooleanVar(value=True)  # «Без стамины»
-        self.resources_root = tk.StringVar(value=RESOURCES_ROOT_DEFAULT)
         self.pitch_offset = tk.IntVar(value=PITCH_OFFSET_DEFAULT)
         self.status = tk.StringVar(value="Укажи папку resources, выбери ресурс и окно игры.")
 
-        self._resources: List[Tuple[str, str]] = []  # (display_name, path)
         self._name_to_path: dict[str, str] = {}
         self._selected_name = tk.StringVar(value="")
 
@@ -50,7 +50,14 @@ class App:
 
         self.screen = None
         self.worker: Optional[Worker] = None
-        self.ts_f = self.ts_g = self.ts_s = None
+        self.ts_f = self.ts_g = self.ts_s = self.ts_r = None
+
+        self.roi_x1 = tk.DoubleVar(value=PROMPT_ROI[0])
+        self.roi_y1 = tk.DoubleVar(value=PROMPT_ROI[1])
+        self.roi_x2 = tk.DoubleVar(value=PROMPT_ROI[2])
+        self.roi_y2 = tk.DoubleVar(value=PROMPT_ROI[3])
+
+        self.aspect_ratio = tk.StringVar(value=str(AspectRatio.RATIO_16_9))
 
         # --- UI ---
         frm = ttk.Frame(root, padding=12)
@@ -58,47 +65,107 @@ class App:
         root.columnconfigure(0, weight=1)
         root.rowconfigure(0, weight=1)
 
-        # Ресурс
-        ttk.Label(frm, text="Ресурс:").grid(row=1, column=0, sticky="w", pady=(6, 0))
-        self.cmb = ttk.Combobox(frm, textvariable=self._selected_name, values=[], state="readonly", width=32)
-        self.cmb.grid(row=1, column=1, columnspan=3, sticky="ew", padx=6, pady=(6, 0))
+        # ============================
+        # ВЕРХНИЙ БЛОК: Основные настройки
+        main_frame = ttk.LabelFrame(frm, text="Основные настройки", padding=10)
+        main_frame.grid(row=0, column=0, columnspan=2, sticky="ew", pady=(0, 10))
 
-        # Окно игры (выбор из списка)
-        ttk.Label(frm, text="Целевое окно:").grid(row=2, column=0, sticky="w", pady=(6, 0))
-        self.win_cmb = ttk.Combobox(frm, textvariable=self._selected_win, values=[], state="readonly", width=40)
-        self.win_cmb.grid(row=2, column=1, columnspan=2, sticky="ew", padx=6, pady=(6, 0))
-        ttk.Button(frm, text="Обновить окна", command=self.refresh_windows).grid(row=2, column=3, sticky="w",
-                                                                                 pady=(6, 0))
+        ttk.Label(main_frame, text="Ресурс:").grid(row=0, column=0, sticky="w")
+        self.cmb = ttk.Combobox(main_frame, textvariable=self._selected_name, values=[], state="readonly", width=32)
+        self.cmb.grid(row=0, column=1, columnspan=2, sticky="ew", padx=6)
 
-        # Настройки
-        ttk.Label(frm, text="Отклонение по Y (px):").grid(row=3, column=0, sticky="w", pady=(6, 0))
-        ttk.Spinbox(frm, from_=0, to=8000, textvariable=self.pitch_offset, width=8) \
-            .grid(row=3, column=1, sticky="w", pady=(6, 0))
+        ttk.Label(main_frame, text="Целевое окно:").grid(row=1, column=0, sticky="w")
+        self.win_cmb = ttk.Combobox(main_frame, textvariable=self._selected_win, values=[], state="readonly", width=40)
+        self.win_cmb.grid(row=1, column=1, sticky="ew", padx=6)
+        ttk.Button(main_frame, text="Обновить окна", command=self.refresh_windows).grid(row=1, column=2, padx=4)
 
-        ttk.Checkbutton(frm, text="Без стамины → нажимать только Gathering", variable=self.want_gathering) \
-            .grid(row=4, column=0, columnspan=4, sticky="w", pady=(6, 2))
+        ttk.Label(main_frame, text="Отклонение по Y (px):").grid(row=2, column=0, sticky="w")
+        ttk.Spinbox(main_frame, from_=0, to=8000, textvariable=self.pitch_offset, width=8) \
+            .grid(row=2, column=1, sticky="w")
 
-        # Кнопки управления
-        self.btn_start = ttk.Button(frm, text="▶ Старт", command=self.start)
-        self.btn_start.grid(row=5, column=0, sticky="ew", pady=(10, 4))
-        self.btn_stop = ttk.Button(frm, text="■ Стоп", command=self.stop, state="disabled")
-        self.btn_stop.grid(row=5, column=1, sticky="ew", pady=(10, 4))
+        ttk.Checkbutton(main_frame, text="Без стамины → нажимать только Gathering", variable=self.want_gathering) \
+            .grid(row=3, column=0, columnspan=3, sticky="w", pady=(6, 2))
 
-        ttk.Label(frm, textvariable=self.status, foreground="#666").grid(row=6, column=0, columnspan=4, sticky="w",
-                                                                         pady=(8, 0))
-        for c in range(1, 4):
-            frm.columsnconfigure(c, weight=1)
+        self.btn_start = ttk.Button(main_frame, text="▶ Старт", command=self.start)
+        self.btn_start.grid(row=4, column=0, pady=(10, 4))
+        self.btn_stop = ttk.Button(main_frame, text="■ Стоп", command=self.stop, state="disabled")
+        self.btn_stop.grid(row=4, column=1, pady=(10, 4))
 
+        ttk.Label(main_frame, textvariable=self.status, foreground="#666") \
+            .grid(row=5, column=0, columnspan=3, sticky="w", pady=(8, 0))
+
+        # ============================
+        # НИЖНИЕ БЛОКИ
+        roi_frame = ttk.LabelFrame(frm, text="Настройка ROI (подсказки [F])", padding=10)
+        roi_frame.grid(row=1, column=0, sticky="nsew", padx=(0, 10))
+
+        ttk.Label(roi_frame, text="x1:").grid(row=0, column=0, sticky="w")
+        ttk.Spinbox(roi_frame, from_=0.0, to=1.0, increment=0.01, textvariable=self.roi_x1, width=6) \
+            .grid(row=0, column=1, sticky="w")
+
+        ttk.Label(roi_frame, text="y1:").grid(row=0, column=2, sticky="w")
+        ttk.Spinbox(roi_frame, from_=0.0, to=1.0, increment=0.01, textvariable=self.roi_y1, width=6) \
+            .grid(row=0, column=3, sticky="w")
+
+        ttk.Label(roi_frame, text="x2:").grid(row=1, column=0, sticky="w")
+        ttk.Spinbox(roi_frame, from_=0.0, to=1.0, increment=0.01, textvariable=self.roi_x2, width=6) \
+            .grid(row=1, column=1, sticky="w")
+
+        ttk.Label(roi_frame, text="y2:").grid(row=1, column=2, sticky="w")
+        ttk.Spinbox(roi_frame, from_=0.0, to=1.0, increment=0.01, textvariable=self.roi_y2, width=6) \
+            .grid(row=1, column=3, sticky="w")
+
+        ttk.Label(roi_frame, text="Aspect ratio:").grid(row=2, column=0, sticky="w")
+        aspect_cb = ttk.Combobox(
+            roi_frame,
+            textvariable=self.aspect_ratio,
+            values=[str(r) for r in AspectRatio],
+            state="readonly",
+            width=6
+        )
+        aspect_cb.grid(row=2, column=1, sticky="w")
+
+        ttk.Button(roi_frame, text="Сделать снимок ROI", command=self.debug_roi) \
+            .grid(row=3, column=0, columnspan=4, sticky="ew", pady=(8, 0))
+
+        extra_frame = ttk.LabelFrame(frm, text="Дополнительно", padding=10)
+        extra_frame.grid(row=1, column=1, sticky="nsew")
+
+        frm.columnconfigure(0, weight=1)
+        frm.columnconfigure(1, weight=1)
+
+        # ============================
         # Инициализация
         self.rescan()
         self.refresh_windows()
         self._tick()
 
+    def get_selected_aspect_ratio(self) -> AspectRatio:
+        value = self.aspect_ratio.get()
+        for ratio in AspectRatio:
+            if str(ratio) == value:
+                return ratio
+        raise ValueError(f"Unknown aspect ratio: {value}")
+
+    def debug_roi(self):
+        """Сохранить картинку с выделенным ROI."""
+        if not self.screen:
+            hwnd = self._selected_hwnd()
+            if not hwnd:
+                messagebox.showerror("Нет окна", "Выбери целевое окно игры из списка.")
+                return
+            self.screen = WindowScreen(hwnd)
+
+        roi_val = (float(self.roi_x1.get()), float(self.roi_y1.get()), float(self.roi_x2.get()),
+                   float(self.roi_y2.get()))
+        roi, roi_tuple = _get_roi_f(self.screen, self.get_selected_aspect_ratio(), roi_val)
+        save_roi_debug(self.screen.grab_bgr(), roi_tuple)
+        self.status.set("ROI-снимок сохранён (roi_debug.png)")
+
     def rescan(self):
-        root_dir = self.resources_root.get().strip()
-        self._resources = scan_resources(root_dir)
-        self._name_to_path = {name: path for name, path in self._resources}
-        names = [name for name, _ in self._resources]
+        _resources = scan_resources()
+        self._name_to_path = {name: path for name, path in _resources}
+        names = [name for name, _ in _resources]
         self.cmb["values"] = names
         if names:
             if self._selected_name.get() not in names:
@@ -150,10 +217,11 @@ class App:
             move_mouse_abs(cx, cy)
             logger.debug(f"Moved mouse to absolute center ({cx},{cy})")
             time.sleep(5)
-            move_mouse_rel(dx = 0,dy=top * 5)
+            move_mouse_rel(dx=0, dy=top * 5)
             time.sleep(5)
-            move_mouse_rel(dx = 0,dy=-int(self.pitch_offset.get() if hasattr(self, "pitch_offset") else PITCH_OFFSET_DEFAULT))
-            logger.debug(f"Moved mouse relative by ({0},-{top/4})")
+            move_mouse_rel(dx=0,
+                           dy=-int(self.pitch_offset.get() if hasattr(self, "pitch_offset") else PITCH_OFFSET_DEFAULT))
+            logger.debug(f"Moved mouse relative by ({0},-{top / 4})")
         except Exception:
             logger.debug(f"Moved mouse relative by ({0},-{Exception})")
             pass
@@ -170,7 +238,7 @@ class App:
             return
         resource_dir = self._name_to_path[name]
         try:
-            self.ts_f, self.ts_g, self.ts_s = load_resource_dir(resource_dir)
+            self.ts_f, self.ts_g, self.ts_s, self.ts_r = load_resource_dir(resource_dir)
         except Exception as e:
             messagebox.showerror("Ошибка загрузки", str(e))
             return
@@ -193,28 +261,21 @@ class App:
         # Захват именно окна (fallback — монитор, где окно)
         try:
             self.screen = WindowScreen(hwnd)
-            if self.screen.grab_bgr() is None:
-                mon_idx = choose_monitor_index_for_window(hwnd)
-                self.screen = Screen(monitor_index=mon_idx)
-        except Exception:
-            mon_idx = choose_monitor_index_for_window(hwnd)
-            self.screen = Screen(monitor_index=mon_idx)
-
-        #self.calibrate_pitch()
+        except Exception as e:
+            messagebox.showerror("Ошибка загрузки", str(e))
+            return
 
         # Запуск воркера
         self.worker = Worker(
             self.screen,
-            self.ts_f, self.ts_g, self.ts_s,
+            self.ts_f, self.ts_g, self.ts_s, self.ts_r,
             self.want_gathering.get(),
-            hwnd=hwnd,
-            resource_dir=self._name_to_path[name]  # <--- ВАЖНО
+            self.get_selected_aspect_ratio(),
         )
         self.worker.start()
         self.btn_start.configure(state="disabled")
         self.btn_stop.configure(state="normal")
         self.status.set(f"Запущено: {name} | окно: {self._selected_win.get()}")
-        #self.stop()#TODO
 
     def stop(self):
         if self.worker:

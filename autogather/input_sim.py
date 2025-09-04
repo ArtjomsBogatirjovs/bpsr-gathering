@@ -75,3 +75,6 @@ def scroll_slow(steps: int = 1, unit: int = SCROLL_UNIT, delay: float = SCROLL_D
     for _ in range(max(0, steps)):
         pag.scroll(unit)
         time.sleep(delay)
+
+def _hide_unhide_ui():
+    press_keys('ctrl', '\\')
