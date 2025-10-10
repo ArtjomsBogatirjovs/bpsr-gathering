@@ -1,5 +1,4 @@
 # autogather/worker.py
-import logging
 import threading
 import time
 
@@ -18,7 +17,7 @@ from .screen import _get_roi_f
 from .templates import TemplateSet
 from .waypoints import WaypointDB
 
-logger = logging.getLogger(__name__)
+
 
 
 class Worker(threading.Thread):
@@ -41,7 +40,6 @@ class Worker(threading.Thread):
         # навигация
         self.nav = Navigator()
 
-        self.y_teach = 0.5
         self.roi_prompt = roi
         self.ratio = ratio
 
@@ -97,8 +95,7 @@ class Worker(threading.Thread):
             wp = self.waypoints.next_available(self.nav.pos_x, self.nav.pos_y)
             if wp is not None:
                 self.state = f"to waypoint → ({wp.x},{wp.y})"
-                dx, dy = self.get_dx_dy(wp.x - self.nav.pos_x, wp.y - self.nav.pos_y)
-                self.nav.approach_by_distance(dx, dy)
+                self.nav.approach_by_distance(wp.x - self.nav.pos_x, wp.y - self.nav.pos_y)
 
                 time.sleep(1)
                 roi, _ = _get_roi_f(self.screen, self.ratio, self.roi_prompt)
@@ -114,36 +111,22 @@ class Worker(threading.Thread):
             # 1) ЕСЛИ подсказок НЕТ — ищем саму руду на всём кадре по отдельным шаблонам
             hit_obj, dx, dy = self._measure_resource_offset()
             steps = 10
-            step_adj = 0.1
             if hit_obj:
                 for i in range(1, steps, 1):
                     self.state = f"approach resource dx={dx}, dy={dy}"
                     if i == 1:
-                        x_step, y_step = self.get_dx_dy(dx, dy)
+                        x_step = dx
                         ignore_toller = False
+                        teach_y = False
                     else:
-                        y_step = dy * step_adj
                         x_step = 0
                         ignore_toller = True
+                        teach_y = True
 
-                    self.nav.approach_by_distance(x_step, y_step, ignore_toller)
+                    self.nav.approach_by_distance(x_step, dy, ignore_toller, teach_y)
                     if self.check_f_and_perform():
                         break
-                    self.y_teach = self.y_teach + step_adj
                 time.sleep(1)
-
-    def get_dx_dy(self, dx, dy):
-        dx_cap_adj = 0.5
-        dx_mult = abs(dx) / 3000
-        if dx_mult > dx_cap_adj:
-            dx_mult = dx_cap_adj
-        dx_adj = dx * dx_mult
-        if abs(dx_adj) > 500:
-            dx_adj = dx * 0.1
-        elif abs(dx_adj) > 300:
-            dx_adj = dx * 0.18
-        logger.debug(f"dx_mult={dx_mult}  and full dx_adj={dx_adj}")
-        return dx + dx_adj, dy * self.y_teach
 
     def _measure_resource_offset(self):
         """
