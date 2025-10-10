@@ -1,4 +1,5 @@
 # autogather/worker.py
+import logging
 import threading
 import time
 
@@ -8,7 +9,7 @@ from .AspectRatio import AspectRatio
 from .config import (
     SCALES, MATCH_THRESHOLD,
     ACTION_COOLDOWN, AFTER_F_SLEEP, ALIGN_TOLERANCE,
-    SCROLL_DELAY, SCROLL_UNIT, MAX_SCROLL_STEPS,
+    SCROLL_UNIT, MAX_SCROLL_STEPS,
     RESOURCE_THRESHOLD, PROMPT_ROI
 )
 from .input_sim import press_key, scroll_once, _hide_unhide_ui
@@ -16,6 +17,8 @@ from .navigator import Navigator
 from .screen import _get_roi_f
 from .templates import TemplateSet
 from .waypoints import WaypointDB
+
+logger = logging.getLogger(__name__)
 
 
 class Worker(threading.Thread):
@@ -32,10 +35,6 @@ class Worker(threading.Thread):
         self.state = "idle"
         self._last_action = 0.0
 
-        # координаты персонажа в условных "пикселях" экрана (origin = 0,0 при старте)
-        self.pos_x = 0
-        self.pos_y = 0
-
         # память узлов
         self.waypoints = WaypointDB()
 
@@ -49,10 +48,6 @@ class Worker(threading.Thread):
     # ---- helpers ----
     def stop(self):
         self._stop.set()
-
-    def _apply_step(self, dx_step: int, dy_step: int):
-        self.pos_x += int(dx_step)
-        self.pos_y += int(dy_step)
 
     def cooldown_ok(self):
         return (time.time() - self._last_action) > ACTION_COOLDOWN
@@ -87,56 +82,68 @@ class Worker(threading.Thread):
             time.sleep(min(0.2, left))
         # aself.nav.approach_by_distance(-self.pos_x, -self.pos_y)
 
+    def press_f_key(self):
+        self.state = "press F"
+        press_key('f')
+        self.hold_after_press()
+        self.waypoints.add_or_update(self.nav.pos_x, self.nav.pos_y)
+
     # ---- main loop ----
     def run(self):
-        self.check_f_and_perform()
-
         while not self._stop.is_set():
-            roi, _ = _get_roi_f(self.screen, self.ratio, self.roi_prompt)
-            if roi is None:
-                self.state = "ROI focus error"
+            if self.check_f_and_perform():
                 continue
-
             # 0) Если есть «готовый» узел — бежим к нему напрямую (без поиска)
-            wp = self.waypoints.next_available(self.pos_x, self.pos_y)
+            wp = self.waypoints.next_available(self.nav.pos_x, self.nav.pos_y)
             if wp is not None:
                 self.state = f"to waypoint → ({wp.x},{wp.y})"
-                dx = wp.x - self.pos_x
-                dy = wp.y - self.pos_y
-                dx_step, dy_step = self.nav.approach_by_distance(dx, dy)
-                self._apply_step(dx_step, dy_step)
-                if self.want_gathering:
-                    scroll_once(SCROLL_UNIT)
-                self.state = "press F (Gathering)"
-                press_key('f')
-                self.hold_after_press()
-                self.waypoints.add_or_update(self.pos_x, self.pos_y)
-                continue
+                dx, dy = self.get_dx_dy(wp.x - self.nav.pos_x, wp.y - self.nav.pos_y)
+                self.nav.approach_by_distance(dx, dy)
 
-            # 2) ЕСЛИ подсказок НЕТ — ищем саму руду на всём кадре по отдельным шаблонам
+                time.sleep(1)
+                roi, _ = _get_roi_f(self.screen, self.ratio, self.roi_prompt)
+                if roi is None:
+                    self.state = "ROI focus error"
+                    continue
+                if self.has_any_prompt(roi):
+                    if self.want_gathering:
+                        scroll_once(SCROLL_UNIT)
+                    self.press_f_key()
+                    continue
 
+            # 1) ЕСЛИ подсказок НЕТ — ищем саму руду на всём кадре по отдельным шаблонам
             hit_obj, dx, dy = self._measure_resource_offset()
-
-            steps = 5
+            steps = 10
+            step_adj = 0.1
             if hit_obj:
                 for i in range(1, steps, 1):
                     self.state = f"approach resource dx={dx}, dy={dy}"
                     if i == 1:
-                        y_step = dy * self.y_teach
-                        x_step = dx * 1.25
+                        x_step, y_step = self.get_dx_dy(dx, dy)
                         ignore_toller = False
                     else:
-                        y_step = dy * (1 - self.y_teach) / steps
+                        y_step = dy * step_adj
                         x_step = 0
                         ignore_toller = True
 
-                    dx_step, dy_step = self.nav.approach_by_distance(x_step, y_step, ignore_toller)
-                    self._apply_step(dx_step, dy_step)
+                    self.nav.approach_by_distance(x_step, y_step, ignore_toller)
                     if self.check_f_and_perform():
-                        self.y_teach += ((1 - self.y_teach) / steps) * i
                         break
+                    self.y_teach = self.y_teach + step_adj
+                time.sleep(1)
 
-            time.sleep(0.2)
+    def get_dx_dy(self, dx, dy):
+        dx_cap_adj = 0.5
+        dx_mult = abs(dx) / 3000
+        if dx_mult > dx_cap_adj:
+            dx_mult = dx_cap_adj
+        dx_adj = dx * dx_mult
+        if abs(dx_adj) > 500:
+            dx_adj = dx * 0.1
+        elif abs(dx_adj) > 300:
+            dx_adj = dx * 0.18
+        logger.debug(f"dx_mult={dx_mult}  and full dx_adj={dx_adj}")
+        return dx + dx_adj, dy * self.y_teach
 
     def _measure_resource_offset(self):
         """
@@ -166,15 +173,13 @@ class Worker(threading.Thread):
         roi, _ = _get_roi_f(self.screen, self.ratio, self.roi_prompt)
         if roi is None:
             return False
-        hit_f = self.ts_focus.best_match(roi, SCALES, MATCH_THRESHOLD) if self.ts_focus.tmps else None
-        hit_g = self.ts_gath.best_match(roi, SCALES, MATCH_THRESHOLD) if self.ts_gath.tmps else None
-        hit_s = self.ts_sel.best_match(roi, SCALES, MATCH_THRESHOLD) if self.ts_sel.tmps else None
-        has_any_prompt = bool(hit_f or hit_g)
-        if has_any_prompt:
-            if self.want_gathering:
-                scroll_once(SCROLL_UNIT)
+        hit_f = self.get_ts_best_match(roi, self.ts_focus)
+        hit_g = self.get_ts_best_match(roi, self.ts_gath)
+        hit_s = self.get_ts_best_match(roi, self.ts_sel)
+        any_prompt = self.has_any_prompt(roi) or hit_f or hit_g
+        if any_prompt:
             return self._handle_prompt(hit_f, hit_g, hit_s)
-        return has_any_prompt
+        return any_prompt
 
     def _handle_prompt(self, hit_f, hit_g, hit_s) -> bool:
         """
@@ -187,19 +192,9 @@ class Worker(threading.Thread):
             time.sleep(0.05)
             return True
 
-        if not self.want_gathering:
-            self.state = "press F (any)"
-            press_key('f')
-            self.hold_after_press()
-            self.waypoints.add_or_update(self.pos_x, self.pos_y)
-            return True
-
-        # нужен Gathering
-        if hit_g and hit_s and self._selector_on_gathering(hit_f, hit_g, hit_s):
-            self.state = "press F (Gathering)"
-            press_key('f')
-            self.hold_after_press()
-            self.waypoints.add_or_update(self.pos_x, self.pos_y)
+        hit_button_f = (hit_g and hit_s and self._selector_on_gathering(hit_f, hit_g, hit_s)) or not self.want_gathering
+        if hit_button_f:
+            self.press_f_key()
             return True
 
         # иначе несколько мягких прокруток
@@ -208,23 +203,32 @@ class Worker(threading.Thread):
         while not aligned and steps < MAX_SCROLL_STEPS and not self._stop.is_set():
             self.state = f"scroll align {steps + 1}/{MAX_SCROLL_STEPS}"
             scroll_once(SCROLL_UNIT)
-            time.sleep(SCROLL_DELAY)
             roi, _ = _get_roi_f(self.screen, self.ratio, self.roi_prompt)
             if roi is None:
                 break
-            hit_f = self.ts_focus.best_match(roi, SCALES, MATCH_THRESHOLD) if self.ts_focus.tmps else None
-            hit_g = self.ts_gath.best_match(roi, SCALES, MATCH_THRESHOLD) if self.ts_gath.tmps else None
-            hit_s = self.ts_sel.best_match(roi, SCALES, MATCH_THRESHOLD) if self.ts_sel.tmps else None
+            hit_f = self.get_ts_best_match(roi, self.ts_focus)
+            hit_g = self.get_ts_best_match(roi, self.ts_gath)
+            hit_s = self.get_ts_best_match(roi, self.ts_sel)
             aligned = hit_g and hit_s and self._selector_on_gathering(hit_f, hit_g, hit_s)
             steps += 1
 
         if aligned:
-            self.state = "press F (Gathering)"
-            press_key('f')
-            self.hold_after_press()
-            self.waypoints.add_or_update(self.pos_x, self.pos_y)
+            self.press_f_key()
             return True
         else:
             self.state = "align failed"
             time.sleep(0.12)
             return True
+
+    def get_ts_best_match(self, roi, template_set: TemplateSet):
+        if roi is None or template_set is None:
+            return None
+        return template_set.best_match(roi, SCALES, MATCH_THRESHOLD) if self.ts_focus.tmps else None
+
+    def has_any_prompt(self, roi) -> bool:
+        hit_f = self.get_ts_best_match(roi, self.ts_focus)
+        if hit_f:
+            return True
+        if self.get_ts_best_match(roi, self.ts_gath):
+            return True
+        return False

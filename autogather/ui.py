@@ -57,7 +57,7 @@ class App:
         self.roi_x2 = tk.DoubleVar(value=PROMPT_ROI[2])
         self.roi_y2 = tk.DoubleVar(value=PROMPT_ROI[3])
 
-        self.aspect_ratio = tk.StringVar(value=str(AspectRatio.RATIO_16_9))
+        self.aspect_ratio = tk.StringVar(value=str(AspectRatio.RATIO_21_9))
 
         # --- UI ---
         frm = ttk.Frame(root, padding=12)

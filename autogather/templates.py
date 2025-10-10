@@ -42,6 +42,8 @@ class TemplateSet:
                     cand = {"score": float(mx), "box": (tl, br)}
                     if not best or cand["score"] > best["score"]:
                         best = cand
+                        if best["score"] >= 0.9:
+                            return best
 
         if DEBUG_MATCHES:
             if best:

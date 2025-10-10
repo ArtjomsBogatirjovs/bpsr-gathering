@@ -36,7 +36,7 @@ class WaypointDB:
         for i, n in enumerate(self.nodes):
             d2 = self._dist2((n.x, n.y), pos)
             if d2 < best_d2:
-                best_d2 = d2;
+                best_d2 = d2
                 best_i = i
         if best_i >= 0 and best_d2 <= r2:
             # слить: берём среднее положение, обновляем время

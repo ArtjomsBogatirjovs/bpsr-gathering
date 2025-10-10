@@ -7,13 +7,22 @@ from .config import (
 from .input_sim import hold_key_ms
 
 
+
 class Navigator:
     """
     Мини-навигация: рывок по X/Y на длительность, пропорциональную расстоянию (в пикселях).
     Возвращаем ФАКТИЧЕСКИЙ шаг, который мы запланировали (px), чтобы воркер обновил координаты.
     """
 
-    def approach_by_distance(self, dx: int, dy: int, ignore_toller: bool = False) -> tuple[int, int]:
+    def __init__(self):
+        self.pos_x = 0
+        self.pos_y = 0
+
+    def _apply_step(self, dx_step: int, dy_step: int):
+        self.pos_x += int(dx_step)
+        self.pos_y += int(dy_step)
+
+    def approach_by_distance(self, dx: int, dy: int, ignore_toller: bool = False):
         """
             dx < 0 → 'A' ; dx > 0 → 'D'
             dy < 0 → 'W' ; dy > 0 → 'S'
@@ -36,4 +45,4 @@ class Navigator:
             dx_step = dx
             time.sleep(APPROACH_PAUSE)
 
-        return dx_step, dy_step
+        self._apply_step(dx_step, dy_step)
