@@ -1,12 +1,14 @@
 # autogather/navigator.py
-import time
 import logging
+import time
 
 from .config import (
     APPROACH_TOLERANCE, APPROACH_PAUSE
 )
 from .input_sim import hold_key_ms
+
 logger = logging.getLogger(__name__)
+
 
 class Navigator:
     """
@@ -18,9 +20,11 @@ class Navigator:
         self.pos_x = 0
         self.pos_y = 0
         self.y_teach = 0.5
-        self.step_adj = 0.01
+        self.step_adj = 0.17
 
     def _teach_y(self):
+        if self.y_teach > 2.5:
+            return
         self.y_teach = self.y_teach + self.step_adj
 
     def _apply_step(self, dx_step: int, dy_step: int):
@@ -29,21 +33,25 @@ class Navigator:
 
     def get_dx_dy(self, dx, dy):
         dx_adj = dx
-        logger.debug(f"1dx={dx}  and 1full dx_adj={dx_adj}")
+        if dx != 0:
+            logger.debug(f"1dx={dx}  and 1full dx_adj={dx_adj}")
         if abs(dx) > 1500:
-            dx_adj = dx * 0.55
+            dx_adj = dx * 0.58
         elif abs(dx) > 1250:
-            dx_adj = dx * 0.65
-        elif abs(dx) > 1000:
             dx_adj = dx * 0.75
+        elif abs(dx) > 1000:
+            dx_adj = dx * 0.8
         elif abs(dx) > 500:
-            dx_adj = dx * 0.85
+            dx_adj = dx * 1
         elif abs(dx) > 300:
-            dx_adj = dx * 0.9
-        logger.debug(f"2full dx_adj={dx_adj}")
+            dx_adj = dx
+
         dy_taught = dy * self.y_teach
         # if self.y_teach > 3:
         # dy_taught = dy * 2
+        if dx != 0:
+            logger.debug(f"NAUCHIL={self.y_teach}")
+            logger.debug(f"2full dx_adj={dx_adj}")
         return dx + dx_adj, dy_taught
 
     def approach_by_distance(self, dx: int, dy: int, ignore_toller: bool = False, y_teach: bool = False):
@@ -61,7 +69,7 @@ class Navigator:
             dy_step = dy
             if y_teach:
                 self._teach_y()
-                ms_y = dy * self.step_adj
+                ms_y = abs(dy * self.step_adj)
                 dy_step = dy * self.step_adj
             hold_key_ms('w' if dy < 0 else 's', ms_y)
             time.sleep(APPROACH_PAUSE)
