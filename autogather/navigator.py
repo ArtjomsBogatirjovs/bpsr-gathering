@@ -19,11 +19,11 @@ class Navigator:
     def __init__(self):
         self.pos_x = 0
         self.pos_y = 0
-        self.y_teach = 0.5
-        self.step_adj = 0.17
+        self.y_teach = 1.0
+        self.step_adj = 0.2
 
     def _teach_y(self):
-        if self.y_teach > 2.5:
+        if self.y_teach > 2:
             return
         self.y_teach = self.y_teach + self.step_adj
 
@@ -32,26 +32,31 @@ class Navigator:
         self.pos_y += int(dy_step)
 
     def get_dx_dy(self, dx, dy):
-        dx_adj = dx
-        if dx != 0:
-            logger.debug(f"1dx={dx}  and 1full dx_adj={dx_adj}")
-        if abs(dx) > 1500:
+        if abs(dx) > 2500:
+            dx_adj = dx * 0.79
+        elif abs(dx) > 2250:
+            dx_adj = dx * 0.7
+        elif abs(dx) > 1750:
+            dx_adj = dx * 0.62
+        elif abs(dx) > 1500:
             dx_adj = dx * 0.58
         elif abs(dx) > 1250:
-            dx_adj = dx * 0.75
+            dx_adj = dx * 0.74
         elif abs(dx) > 1000:
-            dx_adj = dx * 0.8
+            dx_adj = dx * 0.77
+        elif abs(dx) > 750:
+            dx_adj = dx * 0.76
         elif abs(dx) > 500:
-            dx_adj = dx * 1
-        elif abs(dx) > 300:
-            dx_adj = dx
-
+            dx_adj = dx * 0.8
+        elif abs(dx) > 250:
+            dx_adj = dx * 0.6
+        else:
+            dx_adj = dx * 0.4
         dy_taught = dy * self.y_teach
-        # if self.y_teach > 3:
-        # dy_taught = dy * 2
+
         if dx != 0:
+            logger.debug(f"1dx={dx}  and full dx_adj={dx_adj}")
             logger.debug(f"NAUCHIL={self.y_teach}")
-            logger.debug(f"2full dx_adj={dx_adj}")
         return dx + dx_adj, dy_taught
 
     def approach_by_distance(self, dx: int, dy: int, ignore_toller: bool = False, y_teach: bool = False):
@@ -64,7 +69,7 @@ class Navigator:
         dy_step = 0
         dx_in_ms, dy_in_ms = self.get_dx_dy(dx, dy)
         # Y ось
-        if abs(dy) > APPROACH_TOLERANCE or ignore_toller:
+        if abs(dy) > APPROACH_TOLERANCE * 3 or ignore_toller:
             ms_y = abs(dy_in_ms)
             dy_step = dy
             if y_teach:
