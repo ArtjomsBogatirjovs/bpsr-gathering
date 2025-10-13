@@ -3,7 +3,7 @@ import os
 
 import cv2
 
-from .config import IMG_EXTS, DEBUG_MATCHES
+from .config import IMG_EXTS
 
 logger = logging.getLogger(__name__)
 
@@ -31,11 +31,6 @@ class TemplateSet:
                 res = cv2.matchTemplate(gray_roi, t, cv2.TM_CCOEFF_NORMED)
                 _, mx, _, ml = cv2.minMaxLoc(res)
 
-                if DEBUG_MATCHES:
-                    logger.debug(
-                        f"[TEMPLATE {self.directory}] scale={s:.2f} mx={mx:.3f} thr={threshold:.2f}"
-                    )
-
                 if mx >= threshold:
                     tl = (ml[0], ml[1])
                     br = (tl[0] + tw, ml[1] + th)
@@ -44,13 +39,4 @@ class TemplateSet:
                         best = cand
                         if best["score"] >= 0.9:
                             return best
-
-        if DEBUG_MATCHES:
-            if best:
-                logger.debug(
-                    f"--> BEST score={best['score']:.3f}, box={best['box']}"
-                )
-            else:
-                logger.debug("--> NO MATCH")
-
         return best

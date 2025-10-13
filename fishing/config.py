@@ -1,11 +1,12 @@
-RESOURCES_ROOT_DEFAULT = "resources"
+RESOURCES_ROOT_DEFAULT = "resources_fishing"
+RESOURCES_ROOT_BAITS = RESOURCES_ROOT_DEFAULT + "/baits"
 
+RESOURCE_NAME_MAP = {
+    "precise_bait": "Precise bait",
+}
 
-
-
-
-# ROI для подсказок [F] справа
-PROMPT_ROI = (0.65, 0.49, 0.86, 0.62)  # (x1_frac, y1_frac, x2_frac, y2_frac)
+# ROI для fishing menu
+PROMPT_ROI_FISHING_MENU = (0.65, 0.49, 0.86, 0.62)  # (x1_frac, y1_frac, x2_frac, y2_frac)
 
 # Матчинг подсказок
 MATCH_THRESHOLD = 0.7

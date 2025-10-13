@@ -110,11 +110,10 @@ class Worker(threading.Thread):
 
             # 1) ЕСЛИ подсказок НЕТ — ищем саму руду на всём кадре по отдельным шаблонам
             hit_obj, dx, dy = self._measure_resource_offset()
-            steps = 0
             if hit_obj:
                 self.nav.approach_by_distance(dx, dy)
                 if not self.check_f_and_perform():
-                    for i in range(0, steps, 1):
+                    for i in range(0, self.nav.teach_steps, 1):
                         self.state = f"approach resource dx={dx}, dy={dy}"
                         self.nav.approach_by_distance(0, dy, True, True)
                         if self.check_f_and_perform():

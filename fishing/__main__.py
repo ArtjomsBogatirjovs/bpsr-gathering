@@ -1,7 +1,7 @@
 import logging
 import tkinter as tk
 
-from autogather.winutil import enable_dpi_awareness
+from fishing.winutil import enable_dpi_awareness
 from .ui import App
 
 
