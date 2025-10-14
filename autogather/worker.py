@@ -145,16 +145,10 @@ class Worker(threading.Thread):
         return True, dx, dy
 
     def check_f_and_perform(self) -> bool:
-        roi, _ = _get_roi_f(self.screen, self.ratio, self.roi_prompt)
-        if roi is None:
-            return False
-        hit_f = self.get_ts_best_match(roi, self.ts_focus)
-        hit_g = self.get_ts_best_match(roi, self.ts_gath)
-        hit_s = self.get_ts_best_match(roi, self.ts_sel)
-        any_prompt = self.has_any_prompt(roi) or hit_f or hit_g
-        if any_prompt:
-            return self._handle_prompt(hit_f, hit_g, hit_s)
-        return any_prompt
+        any_prompt = self._has_any_prompt()
+        if any_prompt[0]:
+            return self._handle_prompt(any_prompt[1], any_prompt[2], any_prompt[3])
+        return any_prompt[0]
 
     def _handle_prompt(self, hit_f, hit_g, hit_s) -> bool:
         """
@@ -207,3 +201,13 @@ class Worker(threading.Thread):
         if self.get_ts_best_match(roi, self.ts_gath):
             return True
         return False
+
+    def _has_any_prompt(self):
+        roi, _ = _get_roi_f(self.screen, self.ratio, self.roi_prompt)
+        if roi is None:
+            return False
+        hit_f = self.get_ts_best_match(roi, self.ts_focus)
+        hit_g = self.get_ts_best_match(roi, self.ts_gath)
+        hit_s = self.get_ts_best_match(roi, self.ts_sel)
+        any_prompt = (self.has_any_prompt(roi) or hit_f or hit_g) and hit_s
+        return [any_prompt, hit_f, hit_g, hit_s]

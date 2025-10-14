@@ -1,15 +1,13 @@
 # autogather/ui.py
 import logging
-import time
 import tkinter as tk
 from tkinter import ttk, messagebox
 from typing import Optional, Tuple, List
 
 from .AspectRatio import AspectRatio
-from .config import PITCH_OFFSET_DEFAULT, PROMPT_ROI
+from .config import PROMPT_ROI
 from .debug import save_roi_debug
 from .folder_utils import scan_resources, load_resource_dir
-from .input_sim import move_mouse_rel, move_mouse_abs
 from .screen import WindowScreen, _get_roi_f
 from .winutil import list_windows, bring_to_foreground, get_window_rect
 from .worker import Worker
@@ -39,7 +37,6 @@ class App:
 
         # --- состояние ---
         self.want_gathering = tk.BooleanVar(value=True)  # «Без стамины»
-        self.pitch_offset = tk.IntVar(value=PITCH_OFFSET_DEFAULT)
         self.status = tk.StringVar(value="Укажи папку resources, выбери ресурс и окно игры.")
 
         self._name_to_path: dict[str, str] = {}
@@ -78,10 +75,6 @@ class App:
         self.win_cmb = ttk.Combobox(main_frame, textvariable=self._selected_win, values=[], state="readonly", width=40)
         self.win_cmb.grid(row=1, column=1, sticky="ew", padx=6)
         ttk.Button(main_frame, text="Обновить окна", command=self.refresh_windows).grid(row=1, column=2, padx=4)
-
-        ttk.Label(main_frame, text="Отклонение по Y (px):").grid(row=2, column=0, sticky="w")
-        ttk.Spinbox(main_frame, from_=0, to=8000, textvariable=self.pitch_offset, width=8) \
-            .grid(row=2, column=1, sticky="w")
 
         ttk.Checkbutton(main_frame, text="Без стамины → нажимать только Gathering", variable=self.want_gathering) \
             .grid(row=3, column=0, columnspan=3, sticky="w", pady=(6, 2))
@@ -125,7 +118,7 @@ class App:
         )
         aspect_cb.grid(row=2, column=1, sticky="w")
 
-        ttk.Button(roi_frame, text="Сделать снимок ROI", command=self.debug_roi) \
+        ttk.Button(roi_frame, text="Сделать снимок F", command=self.debug_roi) \
             .grid(row=3, column=0, columnspan=4, sticky="ew", pady=(8, 0))
 
         extra_frame = ttk.LabelFrame(frm, text="Дополнительно", padding=10)
@@ -199,32 +192,6 @@ class App:
             if t == disp:
                 return h
         return None
-
-    def calibrate_pitch(self):
-        """Ставим курсор в центр окна игры, затем опускаем камеру на заданное кол-во пикселей мелкими шагами."""
-        try:
-            hwnd = self._selected_hwnd()
-            if not hwnd:
-                return
-            left, top, right, bottom = get_window_rect(hwnd)
-            cx = (left + right) // 2
-            cy = (top + bottom) // 2
-            logger.debug(
-                f"calibrate_pitch: hwnd={hwnd}, rect=({left},{top},{right},{bottom}), "
-                f"center=({cx},{cy}), offsetY={top}"
-            )
-
-            move_mouse_abs(cx, cy)
-            logger.debug(f"Moved mouse to absolute center ({cx},{cy})")
-            time.sleep(5)
-            move_mouse_rel(dx=0, dy=top * 5)
-            time.sleep(5)
-            move_mouse_rel(dx=0,
-                           dy=-int(self.pitch_offset.get() if hasattr(self, "pitch_offset") else PITCH_OFFSET_DEFAULT))
-            logger.debug(f"Moved mouse relative by ({0},-{top / 4})")
-        except Exception:
-            logger.debug(f"Moved mouse relative by ({0},-{Exception})")
-            pass
 
     # -------- старт/стоп --------
     def start(self):

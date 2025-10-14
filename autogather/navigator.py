@@ -3,7 +3,7 @@ import logging
 import time
 
 from .config import (
-    APPROACH_TOLERANCE, APPROACH_PAUSE
+    APPROACH_TOLERANCE_Y,APPROACH_TOLERANCE_X, APPROACH_PAUSE
 )
 from .input_sim import hold_key_ms
 
@@ -45,13 +45,15 @@ class Navigator:
         elif abs(dx) > 1250:
             dx_adj = dx * 0.74
         elif abs(dx) > 1000:
-            dx_adj = dx * 0.77
+            dx_adj = dx * 0.76
         elif abs(dx) > 750:
             dx_adj = dx * 0.76
         elif abs(dx) > 500:
-            dx_adj = dx * 0.8
+            dx_adj = dx * 0.75
+        #elif abs(dx) > 250:
+            #dx_adj = dx * 0.6
         elif abs(dx) > 250:
-            dx_adj = dx * 0.6
+            dx_adj = dx * 0.55
         else:
             dx_adj = dx * 0.4
         dy_taught = dy * self.y_teach
@@ -71,7 +73,7 @@ class Navigator:
         dy_step = 0
         dx_in_ms, dy_in_ms = self.get_dx_dy(dx, dy)
         # Y ось
-        if abs(dy) > APPROACH_TOLERANCE * 3 or ignore_toller:
+        if abs(dy) > APPROACH_TOLERANCE_Y or ignore_toller:
             ms_y = abs(dy_in_ms)
             dy_step = dy
             if y_teach:
@@ -82,7 +84,7 @@ class Navigator:
             time.sleep(APPROACH_PAUSE)
 
         # X ось
-        if abs(dx) > APPROACH_TOLERANCE or ignore_toller:
+        if abs(dx) > APPROACH_TOLERANCE_X or ignore_toller:
             ms_x = abs(dx_in_ms)
             hold_key_ms('a' if dx < 0 else 'd', ms_x)
             dx_step = dx
