@@ -4,9 +4,10 @@ import tkinter as tk
 from tkinter import ttk, messagebox
 from typing import Optional, Tuple, List
 
-from .AspectRatio import AspectRatio
+from autogather.enums.aspect_ratio import AspectRatio
 from .config import PROMPT_ROI
 from .debug import save_roi_debug
+from .enums.gathering_speed import GatheringSpeedLevel
 from .folder_utils import scan_resources, load_resource_dir
 from .screen import WindowScreen, _get_roi_f
 from .winutil import list_windows, bring_to_foreground, get_window_rect
@@ -32,17 +33,17 @@ def choose_monitor_index_for_window(hwnd: int) -> int:
 
 class App:
     def __init__(self, root: tk.Tk):
-        root.title("AutoGather — Window Picker")
+        root.title("Resource AutoGather")
         self.root = root
 
-        # --- состояние ---
-        self.want_gathering = tk.BooleanVar(value=True)  # «Без стамины»
-        self.status = tk.StringVar(value="Укажи папку resources, выбери ресурс и окно игры.")
+        # --- state ---
+        self.want_gathering = tk.BooleanVar(value=True)  # No-stamina mode: press only Gathering
+        self.status = tk.StringVar(value="Select the 'resources' folder, choose a resource, and pick the game window.")
 
         self._name_to_path: dict[str, str] = {}
         self._selected_name = tk.StringVar(value="")
 
-        self._win_choices: List[Tuple[str, int]] = []  # (display_title, hwnd)
+        self._win_choices: List[Tuple[str, int]] = []
         self._selected_win = tk.StringVar(value="")
 
         self.screen = None
@@ -56,6 +57,12 @@ class App:
 
         self.aspect_ratio = tk.StringVar(value=str(AspectRatio.RATIO_21_9))
 
+        # new: gathering speed level
+        self.gathering_speed = tk.StringVar(value=GatheringSpeedLevel.FAST.name)
+
+        # new: run back to start after gathering
+        self.run_back_to_start = tk.BooleanVar(value=False)
+
         # --- UI ---
         frm = ttk.Frame(root, padding=12)
         frm.grid(row=0, column=0, sticky="nsew")
@@ -63,33 +70,47 @@ class App:
         root.rowconfigure(0, weight=1)
 
         # ============================
-        # ВЕРХНИЙ БЛОК: Основные настройки
-        main_frame = ttk.LabelFrame(frm, text="Основные настройки", padding=10)
+        # TOP BLOCK: Main settings
+        main_frame = ttk.LabelFrame(frm, text="Main settings", padding=10)
         main_frame.grid(row=0, column=0, columnspan=2, sticky="ew", pady=(0, 10))
 
-        ttk.Label(main_frame, text="Ресурс:").grid(row=0, column=0, sticky="w")
+        ttk.Label(main_frame, text="Resource:").grid(row=0, column=0, sticky="w")
         self.cmb = ttk.Combobox(main_frame, textvariable=self._selected_name, values=[], state="readonly", width=32)
         self.cmb.grid(row=0, column=1, columnspan=2, sticky="ew", padx=6)
 
-        ttk.Label(main_frame, text="Целевое окно:").grid(row=1, column=0, sticky="w")
+        ttk.Label(main_frame, text="Target window:").grid(row=1, column=0, sticky="w")
         self.win_cmb = ttk.Combobox(main_frame, textvariable=self._selected_win, values=[], state="readonly", width=40)
         self.win_cmb.grid(row=1, column=1, sticky="ew", padx=6)
-        ttk.Button(main_frame, text="Обновить окна", command=self.refresh_windows).grid(row=1, column=2, padx=4)
+        ttk.Button(main_frame, text="Refresh windows", command=self.refresh_windows).grid(row=1, column=2, padx=4)
 
-        ttk.Checkbutton(main_frame, text="Без стамины → нажимать только Gathering", variable=self.want_gathering) \
-            .grid(row=3, column=0, columnspan=3, sticky="w", pady=(6, 2))
+        # new: gathering speed combobox (row=2)
+        ttk.Label(main_frame, text="Gathering speed:").grid(row=2, column=0, sticky="w")
+        self.speed_cmb = ttk.Combobox(
+            main_frame,
+            state="readonly",
+            width=12,
+            textvariable=self.gathering_speed,
+            values=[level.name for level in GatheringSpeedLevel],  # shows SLOW / NORMAL / FAST
+        )
+        self.speed_cmb.grid(row=2, column=1, sticky="w", padx=6)
 
-        self.btn_start = ttk.Button(main_frame, text="▶ Старт", command=self.start)
+        ttk.Checkbutton(
+            main_frame,
+            text="No-stamina mode → press only “Gathering”",
+            variable=self.want_gathering
+        ).grid(row=3, column=0, columnspan=3, sticky="w", pady=(6, 2))
+
+        self.btn_start = ttk.Button(main_frame, text="▶ Start", command=self.start)
         self.btn_start.grid(row=4, column=0, pady=(10, 4))
-        self.btn_stop = ttk.Button(main_frame, text="■ Стоп", command=self.stop, state="disabled")
+        self.btn_stop = ttk.Button(main_frame, text="■ Stop", command=self.stop, state="disabled")
         self.btn_stop.grid(row=4, column=1, pady=(10, 4))
 
         ttk.Label(main_frame, textvariable=self.status, foreground="#666") \
             .grid(row=5, column=0, columnspan=3, sticky="w", pady=(8, 0))
 
         # ============================
-        # НИЖНИЕ БЛОКИ
-        roi_frame = ttk.LabelFrame(frm, text="Настройка ROI (подсказки [F])", padding=10)
+        # LOWER BLOCKS
+        roi_frame = ttk.LabelFrame(frm, text="ROI setup (prompt [F])", padding=10)
         roi_frame.grid(row=1, column=0, sticky="nsew", padx=(0, 10))
 
         ttk.Label(roi_frame, text="x1:").grid(row=0, column=0, sticky="w")
@@ -118,20 +139,31 @@ class App:
         )
         aspect_cb.grid(row=2, column=1, sticky="w")
 
-        ttk.Button(roi_frame, text="Сделать снимок F", command=self.debug_roi) \
+        ttk.Button(roi_frame, text="Capture [F] snapshot", command=self.debug_roi) \
             .grid(row=3, column=0, columnspan=4, sticky="ew", pady=(8, 0))
 
-        extra_frame = ttk.LabelFrame(frm, text="Дополнительно", padding=10)
+        # Advanced
+        extra_frame = ttk.LabelFrame(frm, text="Advanced", padding=10)
         extra_frame.grid(row=1, column=1, sticky="nsew")
+
+        # new: run back to start checkbox
+        ttk.Checkbutton(
+            extra_frame,
+            text="Run back to start after gathering",
+            variable=self.run_back_to_start
+        ).grid(row=0, column=0, sticky="w")
 
         frm.columnconfigure(0, weight=1)
         frm.columnconfigure(1, weight=1)
 
         # ============================
-        # Инициализация
+        # Initialization
         self.rescan()
         self.refresh_windows()
         self._tick()
+
+    def get_gathering_speed(self) -> GatheringSpeedLevel:
+        return GatheringSpeedLevel[self.gathering_speed.get()]
 
     def get_selected_aspect_ratio(self) -> AspectRatio:
         value = self.aspect_ratio.get()

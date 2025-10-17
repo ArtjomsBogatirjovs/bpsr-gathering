@@ -4,10 +4,10 @@ import time
 
 import cv2
 
-from .AspectRatio import AspectRatio
+from autogather.enums.aspect_ratio import AspectRatio
 from .config import (
     SCALES, MATCH_THRESHOLD,
-    ACTION_COOLDOWN, AFTER_F_SLEEP, ALIGN_TOLERANCE,
+    ACTION_COOLDOWN, ALIGN_TOLERANCE,
     SCROLL_UNIT, MAX_SCROLL_STEPS,
     RESOURCE_THRESHOLD, PROMPT_ROI
 )
@@ -68,18 +68,18 @@ class Worker(threading.Thread):
         dg = abs(ys - yg)
         return dg + ALIGN_TOLERANCE < df
 
-    def hold_after_press(self, seconds: float = AFTER_F_SLEEP):
-        """Блокирующая пауза после нажатия F (время на добычу)."""
+    def hold_after_press(self):
         self._last_action = time.time()
-        end = self._last_action + seconds
+        end = self._last_action + self._gathering_seconds()
         while not self._stop.is_set():
             left = end - time.time()
             if left <= 0:
                 break
             self.state = f"mining… {left:.1f}s"
             time.sleep(min(0.2, left))
-        # aself.nav.approach_by_distance(-self.pos_x, -self.pos_y)
 
+    def _gathering_seconds(self):
+        return 6.5
     def press_f_key(self):
         self.state = "press F"
         press_key('f')

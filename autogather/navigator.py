@@ -19,10 +19,10 @@ class Navigator:
     def __init__(self):
         self.pos_x = 0
         self.pos_y = 0
-        self.y_teach = 1.0
+        self.y_teach = 1.2
         self.step_adj = 0.05
-        self.teach_steps = 0
-        self.teach_cap = 2
+        self.teach_steps = 2
+        self.teach_cap = 1.5
 
     def _teach_y(self):
         if self.y_teach > self.teach_cap:

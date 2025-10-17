@@ -4,7 +4,7 @@ import cv2
 import numpy as np
 from mss import mss
 
-from .AspectRatio import AspectRatio
+from autogather.enums.aspect_ratio import AspectRatio
 from .config import PROMPT_ROI
 from .winutil import get_window_rect
 

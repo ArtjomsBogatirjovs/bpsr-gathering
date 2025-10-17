@@ -1,6 +1,5 @@
 from enum import Enum
 
-
 class AspectRatio(Enum):
     RATIO_21_9 = (21, 9)
     RATIO_16_9 = (16, 9)
