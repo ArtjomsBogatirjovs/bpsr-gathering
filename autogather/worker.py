@@ -11,6 +11,7 @@ from .config import (
     SCROLL_UNIT, MAX_SCROLL_STEPS,
     RESOURCE_THRESHOLD, PROMPT_ROI
 )
+from .enums.gathering_speed import GatheringSpeedLevel
 from .input_sim import press_key, scroll_once, _hide_unhide_ui
 from .navigator import Navigator
 from .screen import _get_roi_f
@@ -18,11 +19,10 @@ from .templates import TemplateSet
 from .waypoints import WaypointDB
 
 
-
-
 class Worker(threading.Thread):
     def __init__(self, screen, ts_focus: TemplateSet, ts_gath: TemplateSet,
-                 ts_sel: TemplateSet, ts_res: TemplateSet, want_gathering: bool, ratio: AspectRatio, roi=PROMPT_ROI):
+                 ts_sel: TemplateSet, ts_res: TemplateSet, want_gathering: bool, ratio: AspectRatio,
+                 gathering_speed: GatheringSpeedLevel, run_to_start: bool, roi=PROMPT_ROI):
         super().__init__(daemon=True)
         self.screen = screen
         self.ts_focus = ts_focus
@@ -33,6 +33,8 @@ class Worker(threading.Thread):
         self._stop = threading.Event()
         self.state = "idle"
         self._last_action = 0.0
+        self.gathering_speed = gathering_speed
+        self.run_to_start = run_to_start
 
         # память узлов
         self.waypoints = WaypointDB()
@@ -42,6 +44,39 @@ class Worker(threading.Thread):
 
         self.roi_prompt = roi
         self.ratio = ratio
+
+    # ---- main loop ----
+    def run(self):
+        while not self._stop.is_set():
+            if self.check_f_and_perform():
+                continue
+            if self.run_to_start:
+                self._run_to_start()
+            # 0) Если есть «готовый» узел — бежим к нему напрямую (без поиска)
+            wp = self.waypoints.next_available(self.nav.pos_x, self.nav.pos_y)
+            if wp is not None:
+                self.state = f"to waypoint → ({wp.x},{wp.y})"
+                self.nav.approach_by_distance(wp.x - self.nav.pos_x, wp.y - self.nav.pos_y)
+
+                time.sleep(1)
+                self.check_f_and_perform()
+                continue
+
+            # 1) ЕСЛИ подсказок НЕТ — ищем саму руду на всём кадре по отдельным шаблонам
+            hit_obj, dx, dy = self._measure_resource_offset()
+            if hit_obj:
+                self.nav.approach_by_distance(dx, dy)
+                if not self.check_f_and_perform():
+                    for i in range(0, self.nav.teach_steps, 1):
+                        self.state = f"approach resource dx={dx}, dy={dy}"
+                        self.nav.approach_by_distance(0, dy, True, True)
+                        if self.check_f_and_perform():
+                            break
+                time.sleep(1)
+
+    def _run_to_start(self):
+        self.nav.approach_by_distance(self.nav.pos_x * -1, self.nav.pos_y * -1)
+        self.check_f_and_perform()
 
     # ---- helpers ----
     def stop(self):
@@ -79,46 +114,21 @@ class Worker(threading.Thread):
             time.sleep(min(0.2, left))
 
     def _gathering_seconds(self):
-        return 6.5
+        if self.gathering_speed == GatheringSpeedLevel.SLOW:
+            return 7
+        elif self.gathering_speed == GatheringSpeedLevel.NORMAL:
+            return 4
+        elif self.gathering_speed == GatheringSpeedLevel.FAST:
+            return 3
+        else:
+            return 7
+
     def press_f_key(self):
         self.state = "press F"
         press_key('f')
+        time.sleep(1)
         self.hold_after_press()
         self.waypoints.add_or_update(self.nav.pos_x, self.nav.pos_y)
-
-    # ---- main loop ----
-    def run(self):
-        while not self._stop.is_set():
-            if self.check_f_and_perform():
-                continue
-            # 0) Если есть «готовый» узел — бежим к нему напрямую (без поиска)
-            wp = self.waypoints.next_available(self.nav.pos_x, self.nav.pos_y)
-            if wp is not None:
-                self.state = f"to waypoint → ({wp.x},{wp.y})"
-                self.nav.approach_by_distance(wp.x - self.nav.pos_x, wp.y - self.nav.pos_y)
-
-                time.sleep(1)
-                roi, _ = _get_roi_f(self.screen, self.ratio, self.roi_prompt)
-                if roi is None:
-                    self.state = "ROI focus error"
-                    continue
-                if self.has_any_prompt(roi):
-                    if self.want_gathering:
-                        scroll_once(SCROLL_UNIT)
-                    self.press_f_key()
-                    continue
-
-            # 1) ЕСЛИ подсказок НЕТ — ищем саму руду на всём кадре по отдельным шаблонам
-            hit_obj, dx, dy = self._measure_resource_offset()
-            if hit_obj:
-                self.nav.approach_by_distance(dx, dy)
-                if not self.check_f_and_perform():
-                    for i in range(0, self.nav.teach_steps, 1):
-                        self.state = f"approach resource dx={dx}, dy={dy}"
-                        self.nav.approach_by_distance(0, dy, True, True)
-                        if self.check_f_and_perform():
-                            break
-                time.sleep(1)
 
     def _measure_resource_offset(self):
         """

@@ -69,7 +69,6 @@ class WaypointDB:
             try:
                 self.nodes.remove(best)
             except ValueError:
-                # уже удалён — игнорируем
                 pass
 
         return best

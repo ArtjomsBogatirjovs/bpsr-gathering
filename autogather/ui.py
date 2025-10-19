@@ -270,6 +270,8 @@ class App:
             self.ts_f, self.ts_g, self.ts_s, self.ts_r,
             self.want_gathering.get(),
             self.get_selected_aspect_ratio(),
+            self.get_gathering_speed(),
+            self.run_back_to_start.get()
         )
         self.worker.start()
         self.btn_start.configure(state="disabled")

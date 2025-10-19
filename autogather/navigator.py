@@ -45,7 +45,7 @@ class Navigator:
         elif abs(dx) > 1250:
             dx_adj = dx * 0.74
         elif abs(dx) > 1000:
-            dx_adj = dx * 0.76
+            dx_adj = dx * 0.75
         elif abs(dx) > 750:
             dx_adj = dx * 0.76
         elif abs(dx) > 500:
