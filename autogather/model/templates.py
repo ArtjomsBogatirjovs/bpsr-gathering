@@ -3,7 +3,7 @@ import os
 
 import cv2
 
-from .config import IMG_EXTS, DEBUG_MATCHES
+from autogather.config import IMG_EXTS, DEBUG_MATCHES
 
 logger = logging.getLogger(__name__)
 

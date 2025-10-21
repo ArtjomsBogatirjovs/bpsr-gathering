@@ -5,7 +5,7 @@ import time
 from dataclasses import dataclass
 from typing import List, Optional, Tuple
 
-from .config import NODE_MIN_REVISIT_SEC, NODE_MERGE_RADIUS_PX
+from autogather.config import NODE_MIN_REVISIT_SEC, NODE_MERGE_RADIUS_PX
 
 
 @dataclass
@@ -21,7 +21,7 @@ class WaypointDB:
 
     @staticmethod
     def _dist2(a: Tuple[int, int], b: Tuple[int, int]) -> int:
-        dx = a[0] - b[0];
+        dx = a[0] - b[0]
         dy = a[1] - b[1]
         return dx * dx + dy * dy
 

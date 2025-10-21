@@ -3,7 +3,7 @@ from typing import List, Dict
 
 from autogather.config import RESOURCES_ROOT_DEFAULT, REQUIRED_FOLDERS
 from autogather.enums.resource import Resource
-from autogather.templates import TemplateSet
+from autogather.model.templates import TemplateSet
 
 FOLDER_TO_RESOURCE: Dict[str, Resource] = {r.folder_name: r for r in Resource}
 

@@ -5,25 +5,25 @@ import time
 import cv2
 
 from autogather.enums.aspect_ratio import AspectRatio
-from .config import (
+from autogather.config import (
     SCALES, MATCH_THRESHOLD,
     ACTION_COOLDOWN, ALIGN_TOLERANCE,
     SCROLL_UNIT, MAX_SCROLL_STEPS,
-    RESOURCE_THRESHOLD, PROMPT_ROI
+    RESOURCE_THRESHOLD
 )
-from .enums.gathering_speed import GatheringSpeedLevel
-from .enums.resource import Resource
-from .input_sim import press_key, scroll_once, _hide_unhide_ui
-from .navigator import Navigator
-from .screen import _get_roi_f
-from .templates import TemplateSet
-from .waypoints import WaypointDB
+from autogather.enums.gathering_speed import GatheringSpeedLevel
+from autogather.input_sim import press_key, scroll_once, _hide_unhide_ui
+from autogather.model.navigator import Navigator
+from autogather.model.resource_model import ResourceObject
+from autogather.screen import _get_roi_f
+from autogather.model.templates import TemplateSet
+from autogather.model.waypoints import WaypointDB
 
 
 class Worker(threading.Thread):
     def __init__(self, screen, ts_focus: TemplateSet, ts_gath: TemplateSet,
                  ts_sel: TemplateSet, ts_res: TemplateSet, want_gathering: bool, ratio: AspectRatio,
-                 gathering_speed: GatheringSpeedLevel, resource: Resource, run_to_start: bool, roi=PROMPT_ROI):
+                 gathering_speed: GatheringSpeedLevel, resource: ResourceObject, run_to_start: bool):
         super().__init__(daemon=True)
         self.screen = screen
         self.ts_focus = ts_focus
@@ -37,14 +37,11 @@ class Worker(threading.Thread):
         self.gathering_speed = gathering_speed
         self.run_to_start = run_to_start
 
-        # память узлов
         self.waypoints = WaypointDB()
-
-        # навигация
         self.nav = Navigator(resource)
 
-        self.roi_prompt = roi
         self.ratio = ratio
+        self.res = resource
 
     # ---- main loop ----
     def run(self):
@@ -67,12 +64,7 @@ class Worker(threading.Thread):
             hit_obj, dx, dy = self._measure_resource_offset()
             if hit_obj:
                 self.nav.approach_by_distance(dx, dy)
-                if not self.check_f_and_perform():
-                    for i in range(0, self.nav.teach_steps, 1):
-                        self.state = f"approach resource dx={dx}, dy={dy}"
-                        self.nav.approach_by_distance(0, dy, True, True)
-                        if self.check_f_and_perform():
-                            break
+                self.check_f_and_perform()
                 time.sleep(1)
 
     def _run_to_start(self):
@@ -92,16 +84,17 @@ class Worker(threading.Thread):
         return (y1 + y2) // 2
 
     def _selector_on_gathering(self, hit_f, hit_g, hit_s):
-        """True, если [F] ближе к Gathering, чем к Focused (с допуском)."""
+        if not hit_f:
+            return True
         if not (hit_g and hit_s):
             return False
         ys = self._y_center(hit_s["box"])
         yg = self._y_center(hit_g["box"])
-        df = 10 ** 9
-        if hit_f:
-            yf = self._y_center(hit_f["box"])
-            df = abs(ys - yf)
+        yf = self._y_center(hit_f["box"])
+
+        df = abs(ys - yf)
         dg = abs(ys - yg)
+
         return dg + ALIGN_TOLERANCE < df
 
     def hold_after_press(self):
@@ -166,7 +159,7 @@ class Worker(threading.Thread):
             time.sleep(0.05)
             return True
 
-        hit_button_f = (hit_g and hit_s and self._selector_on_gathering(hit_f, hit_g, hit_s)) or not self.want_gathering or hit_f is None
+        hit_button_f = (hit_g and hit_s and self._selector_on_gathering(hit_f, hit_g, hit_s)) or not self.want_gathering or not self.res.is_focus_needed
         if hit_button_f:
             self.press_f_key()
             return True
@@ -176,7 +169,7 @@ class Worker(threading.Thread):
         while not aligned and steps < MAX_SCROLL_STEPS and not self._stop.is_set():
             self.state = f"scroll align {steps + 1}/{MAX_SCROLL_STEPS}"
             scroll_once(SCROLL_UNIT)
-            roi, _ = _get_roi_f(self.screen, self.ratio, self.roi_prompt)
+            roi, _ = _get_roi_f(self.screen, self.ratio)
             if roi is None:
                 break
             hit_f = self.get_ts_best_match(roi, self.ts_focus)
@@ -199,7 +192,7 @@ class Worker(threading.Thread):
         return template_set.best_match(roi, SCALES, MATCH_THRESHOLD)
 
     def _has_any_prompt(self):
-        roi, _ = _get_roi_f(self.screen, self.ratio, self.roi_prompt)
+        roi, _ = _get_roi_f(self.screen, self.ratio)
         if roi is None:
             return False
         hit_f = self.get_ts_best_match(roi, self.ts_focus)
