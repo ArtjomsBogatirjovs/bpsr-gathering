@@ -1,13 +1,5 @@
 RESOURCES_ROOT_DEFAULT = "resources"
 
-RESOURCE_NAME_MAP = {
-    "luna_ore": "Luna Ore",
-    "baru_ore": "Baru Ore",
-    "grey-top_flax": "Grey-top Flax",
-    "wheat": "Wheat",
-    # добавляй сюда свои пары по вкусу
-}
-
 ACTION_COOLDOWN = 1  # сек: мин. пауза между попытками нажать F
 
 # ROI для подсказок [F] справа
@@ -36,8 +28,6 @@ DEBUG_MATCHES = False
 # ===== Поиск самого ресурса (объект) =====
 RESOURCE_THRESHOLD = 0.8   # порог для matchTemplate на картинках ресурса
 APPROACH_PAUSE     = 0.08   # пауза между шагами
-APPROACH_TOLERANCE_Y = 250     # пикселей — считаем "дошли", если ресурс почти в центре
-APPROACH_TOLERANCE_X = 150     # пикселей — считаем "дошли", если ресурс почти в центре
 
 # ===== Память точек (узлов) =====
 NODE_MIN_REVISIT_SEC   = 30     # мин. время, после которого узел «снова доступен»

@@ -11,7 +11,7 @@ class TemplateSet:
     def __init__(self, directory: str):
         self.tmps = []
         self.directory = directory
-        if os.path.isdir(directory):
+        if directory is not None and os.path.isdir(directory):
             for n in os.listdir(directory):
                 if n.lower().endswith(IMG_EXTS):
                     p = os.path.join(directory, n)
@@ -20,6 +20,8 @@ class TemplateSet:
                         self.tmps.append(g)
 
     def best_match(self, gray_roi, scales, threshold):
+        if self.tmps is None or len(self.tmps) == 0:
+            return None
         best = None
         H, W = gray_roi.shape[:2]
         for idx, g in enumerate(self.tmps):

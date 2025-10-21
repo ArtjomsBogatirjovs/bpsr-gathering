@@ -8,6 +8,7 @@ from autogather.enums.aspect_ratio import AspectRatio
 from .config import PROMPT_ROI
 from .debug import save_roi_debug
 from .enums.gathering_speed import GatheringSpeedLevel
+from .enums.resource import Resource
 from .folder_utils import scan_resources, load_resource_dir
 from .screen import WindowScreen, _get_roi_f
 from .winutil import list_windows, bring_to_foreground, get_window_rect
@@ -40,7 +41,8 @@ class App:
         self.want_gathering = tk.BooleanVar(value=True)  # No-stamina mode: press only Gathering
         self.status = tk.StringVar(value="Select the 'resources' folder, choose a resource, and pick the game window.")
 
-        self._name_to_path: dict[str, str] = {}
+        self.resource = None
+        self._name_to_res: dict[str, Resource] = {}
         self._selected_name = tk.StringVar(value="")
 
         self._win_choices: List[Tuple[str, int]] = []
@@ -189,16 +191,20 @@ class App:
 
     def rescan(self):
         _resources = scan_resources()
-        self._name_to_path = {name: path for name, path in _resources}
-        names = [name for name, _ in _resources]
+        self._name_to_res = {res.display_name: res for res in _resources}
+
+        names = list(self._name_to_res.keys())
         self.cmb["values"] = names
+
         if names:
-            if self._selected_name.get() not in names:
+            cur = self._selected_name.get()
+            if cur not in names:
                 self._selected_name.set(names[0])
-            self.status.set(f"Нашёл {len(names)} ресурс(а).")
+            self.status.set(f"Found {len(names)} resources.")
         else:
             self._selected_name.set("")
             self.status.set("В корне нет валидных ресурсов (нужны focused/gathering/selector).")
+
 
     # -------- окна --------
     def refresh_windows(self):
@@ -232,45 +238,43 @@ class App:
 
         # ресурс
         name = self._selected_name.get().strip()
-        if not name or name not in self._name_to_path:
+        if not name or name not in self._name_to_res:
             messagebox.showerror("Нет ресурса", "Выбери ресурс из списка.")
             return
-        resource_dir = self._name_to_path[name]
+        resource_enum = self._name_to_res[name]
         try:
-            self.ts_f, self.ts_g, self.ts_s, self.ts_r = load_resource_dir(resource_dir)
+            self.ts_f, self.ts_g, self.ts_s, self.ts_r = load_resource_dir(resource_enum.folder_name, resource_enum)
         except Exception as e:
             messagebox.showerror("Ошибка загрузки", str(e))
             return
-        if not (self.ts_f.tmps and self.ts_g.tmps and self.ts_s.tmps):
+        if not (self.ts_g.tmps and self.ts_s.tmps) or (not self.ts_f.tmps and resource_enum.is_focus_needed):
             messagebox.showerror("Нет шаблонов", "В одной из подпапок нет изображений.")
             return
 
-        # целевое окно
         hwnd = self._selected_hwnd()
         if not hwnd:
             messagebox.showerror("Нет окна", "Выбери целевое окно игры из списка.")
             return
 
-        # Поднять окно в фореграунд для стабильного захвата/ввода
         try:
             bring_to_foreground(hwnd)
         except Exception:
             pass
 
-        # Захват именно окна (fallback — монитор, где окно)
         try:
             self.screen = WindowScreen(hwnd)
         except Exception as e:
-            messagebox.showerror("Ошибка загрузки", str(e))
+            messagebox.showerror("Error screen loading", str(e))
             return
 
-        # Запуск воркера
+        # Create main loop
         self.worker = Worker(
             self.screen,
             self.ts_f, self.ts_g, self.ts_s, self.ts_r,
             self.want_gathering.get(),
             self.get_selected_aspect_ratio(),
             self.get_gathering_speed(),
+            resource_enum,
             self.run_back_to_start.get()
         )
         self.worker.start()

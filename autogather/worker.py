@@ -12,6 +12,7 @@ from .config import (
     RESOURCE_THRESHOLD, PROMPT_ROI
 )
 from .enums.gathering_speed import GatheringSpeedLevel
+from .enums.resource import Resource
 from .input_sim import press_key, scroll_once, _hide_unhide_ui
 from .navigator import Navigator
 from .screen import _get_roi_f
@@ -22,7 +23,7 @@ from .waypoints import WaypointDB
 class Worker(threading.Thread):
     def __init__(self, screen, ts_focus: TemplateSet, ts_gath: TemplateSet,
                  ts_sel: TemplateSet, ts_res: TemplateSet, want_gathering: bool, ratio: AspectRatio,
-                 gathering_speed: GatheringSpeedLevel, run_to_start: bool, roi=PROMPT_ROI):
+                 gathering_speed: GatheringSpeedLevel, resource: Resource, run_to_start: bool, roi=PROMPT_ROI):
         super().__init__(daemon=True)
         self.screen = screen
         self.ts_focus = ts_focus
@@ -40,7 +41,7 @@ class Worker(threading.Thread):
         self.waypoints = WaypointDB()
 
         # навигация
-        self.nav = Navigator()
+        self.nav = Navigator(resource)
 
         self.roi_prompt = roi
         self.ratio = ratio
@@ -120,8 +121,6 @@ class Worker(threading.Thread):
             return 4
         elif self.gathering_speed == GatheringSpeedLevel.FAST:
             return 3
-        else:
-            return 7
 
     def press_f_key(self):
         self.state = "press F"
@@ -142,6 +141,7 @@ class Worker(threading.Thread):
             return False, 0, 0
         gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
         _hide_unhide_ui()
+        time.sleep(0.5)
         hit = self.ts_resource.best_match(gray, SCALES, RESOURCE_THRESHOLD)
         _hide_unhide_ui()
         if not hit:
@@ -161,22 +161,16 @@ class Worker(threading.Thread):
         return any_prompt[0]
 
     def _handle_prompt(self, hit_f, hit_g, hit_s) -> bool:
-        """
-        Обработка ситуации, когда подсказки (Focused/Gathering) найдены.
-        Возвращает True, если мы что-то сделали (жали F / скроллили / подождали)
-        и цикл run() должен сразу continue.
-        """
         if not self.cooldown_ok():
             self.state = "cooldown"
             time.sleep(0.05)
             return True
 
-        hit_button_f = (hit_g and hit_s and self._selector_on_gathering(hit_f, hit_g, hit_s)) or not self.want_gathering
+        hit_button_f = (hit_g and hit_s and self._selector_on_gathering(hit_f, hit_g, hit_s)) or not self.want_gathering or hit_f is None
         if hit_button_f:
             self.press_f_key()
             return True
 
-        # иначе несколько мягких прокруток
         steps = 0
         aligned = hit_g and hit_s and self._selector_on_gathering(hit_f, hit_g, hit_s)
         while not aligned and steps < MAX_SCROLL_STEPS and not self._stop.is_set():
@@ -202,15 +196,7 @@ class Worker(threading.Thread):
     def get_ts_best_match(self, roi, template_set: TemplateSet):
         if roi is None or template_set is None:
             return None
-        return template_set.best_match(roi, SCALES, MATCH_THRESHOLD) if self.ts_focus.tmps else None
-
-    def has_any_prompt(self, roi) -> bool:
-        hit_f = self.get_ts_best_match(roi, self.ts_focus)
-        if hit_f:
-            return True
-        if self.get_ts_best_match(roi, self.ts_gath):
-            return True
-        return False
+        return template_set.best_match(roi, SCALES, MATCH_THRESHOLD)
 
     def _has_any_prompt(self):
         roi, _ = _get_roi_f(self.screen, self.ratio, self.roi_prompt)
@@ -219,5 +205,5 @@ class Worker(threading.Thread):
         hit_f = self.get_ts_best_match(roi, self.ts_focus)
         hit_g = self.get_ts_best_match(roi, self.ts_gath)
         hit_s = self.get_ts_best_match(roi, self.ts_sel)
-        any_prompt = (self.has_any_prompt(roi) or hit_f or hit_g) and hit_s
+        any_prompt = (hit_f or hit_g) and hit_s
         return [any_prompt, hit_f, hit_g, hit_s]

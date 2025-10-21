@@ -3,8 +3,9 @@ import logging
 import time
 
 from .config import (
-    APPROACH_TOLERANCE_Y,APPROACH_TOLERANCE_X, APPROACH_PAUSE
+    APPROACH_PAUSE
 )
+from .enums.resource import Resource, DEFAULT_TOLERANCE_Y, DEFAULT_TOLERANCE_X
 from .input_sim import hold_key_ms
 
 logger = logging.getLogger(__name__)
@@ -16,12 +17,13 @@ class Navigator:
     Возвращаем ФАКТИЧЕСКИЙ шаг, который мы запланировали (px), чтобы воркер обновил координаты.
     """
 
-    def __init__(self):
+    def __init__(self, resource: Resource):
+        self.resource = resource
         self.pos_x = 0
         self.pos_y = 0
-        self.y_teach = 1.2
+        self.y_teach = 1.3
         self.step_adj = 0.05
-        self.teach_steps = 2
+        self.teach_steps = 0
         self.teach_cap = 1.5
 
     def _teach_y(self):
@@ -35,25 +37,25 @@ class Navigator:
 
     def get_dx_dy(self, dx, dy):
         if abs(dx) > 2500:
-            dx_adj = dx * 0.79
+            dx_adj = dx * 0.75
         elif abs(dx) > 2250:
             dx_adj = dx * 0.7
         elif abs(dx) > 1750:
-            dx_adj = dx * 0.62
+            dx_adj = dx * 0.64
         elif abs(dx) > 1500:
-            dx_adj = dx * 0.58
+            dx_adj = dx * 0.57
         elif abs(dx) > 1250:
-            dx_adj = dx * 0.74
+            dx_adj = dx * 0.72
         elif abs(dx) > 1000:
-            dx_adj = dx * 0.75
+            dx_adj = dx * 0.74
         elif abs(dx) > 750:
             dx_adj = dx * 0.76
         elif abs(dx) > 500:
-            dx_adj = dx * 0.75
-        #elif abs(dx) > 250:
-            #dx_adj = dx * 0.6
+            dx_adj = dx * 0.73
+        # elif abs(dx) > 250:
+        # dx_adj = dx * 0.6
         elif abs(dx) > 250:
-            dx_adj = dx * 0.55
+            dx_adj = dx * 0.5
         else:
             dx_adj = dx * 0.4
         dy_taught = dy * self.y_teach
@@ -69,11 +71,13 @@ class Navigator:
             dy < 0 → 'W' ; dy > 0 → 'S'
             Возвращает (dx_step, dy_step) — сколько пикселей мы планово сместились.
         """
+        # dx_step = DEFAULT_TOLERANCE_X / 2
         dx_step = 0
+        # dy_step = DEFAULT_TOLERANCE_Y / 2
         dy_step = 0
         dx_in_ms, dy_in_ms = self.get_dx_dy(dx, dy)
         # Y ось
-        if abs(dy) > APPROACH_TOLERANCE_Y or ignore_toller:
+        if abs(dy) > DEFAULT_TOLERANCE_Y or ignore_toller:
             ms_y = abs(dy_in_ms)
             dy_step = dy
             if y_teach:
@@ -84,7 +88,7 @@ class Navigator:
             time.sleep(APPROACH_PAUSE)
 
         # X ось
-        if abs(dx) > APPROACH_TOLERANCE_X or ignore_toller:
+        if abs(dx) > DEFAULT_TOLERANCE_X or ignore_toller:
             ms_x = abs(dx_in_ms)
             hold_key_ms('a' if dx < 0 else 'd', ms_x)
             dx_step = dx
