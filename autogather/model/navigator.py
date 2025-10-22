@@ -5,7 +5,6 @@ import time
 from autogather.config import (
     APPROACH_PAUSE
 )
-from autogather.enums.resource import DEFAULT_TOLERANCE_Y, DEFAULT_TOLERANCE_X
 from autogather.input_sim import hold_key_ms
 from autogather.model.resource_model import ResourceObject
 
@@ -27,53 +26,65 @@ class Navigator:
         self.resource = resource
         self.pos_x = 0
         self.pos_y = 0
-        self.y_teach = 1.3
 
     def _apply_step(self, dx_step: int, dy_step: int):
         self.pos_x += int(dx_step)
         self.pos_y += int(dy_step)
+        logger.debug(f"DY POSITION={self.pos_y} and DX POSITION={self.pos_x}")
+
+    def _calc_adjustment_x(self, value: float) -> float:
+        a = abs(value)
+        if a > 2500: return value * 0.72
+        if a > 2250: return value * 0.70
+        if a > 1750: return value * 0.64
+        if a > 1500: return value * 0.6
+        if a > 1250: return value * 0.72
+        if a > 1000: return value * 0.8
+        if a > 750:  return value * 0.74
+        if a > 500:  return value * 0.7
+        if a > 250:  return value * 0.7
+        return 0.0
+
+    def _calc_adjustment_y(self, value: float) -> float:
+        a = abs(value)
+        if a > 2500: return value * 0.75
+        if a > 2250: return value * 0.70
+        if a > 1750: return value * 0.64
+        if a > 1500: return value * 0.57
+        if a > 1250: return value * 0.70
+        if a > 1000: return value * 0.74
+        if a > 750:  return value * 0.76
+        if a > 500:  return value * 0.73
+        if a > 250:  return value * 0.51
+        return 0.0
 
     def get_dx_dy(self, dx, dy):
-        if abs(dx) > 2500:
-            dx_adj = dx * 0.75
-        elif abs(dx) > 2250:
-            dx_adj = dx * 0.7
-        elif abs(dx) > 1750:
-            dx_adj = dx * 0.64
-        elif abs(dx) > 1500:
-            dx_adj = dx * 0.57
-        elif abs(dx) > 1250:
-            dx_adj = dx * 0.72
-        elif abs(dx) > 1000:
-            dx_adj = dx * 0.74
-        elif abs(dx) > 750:
-            dx_adj = dx * 0.76
-        elif abs(dx) > 500:
-            dx_adj = dx * 0.73
-        # elif abs(dx) > 250:
-        # dx_adj = dx * 0.6
-        elif abs(dx) > 250:
-            dx_adj = dx * 0.5
-        else:
-            dx_adj = dx * 0
-        dy_taught = dy * self.y_teach
+        dx_adj = self._calc_adjustment_x(dx)
+        dy_adj = self._calc_adjustment_y(dy)
 
         if dx != 0:
-            logger.debug(f"1dx={dx}  and full dx_adj={dx_adj}")
-            logger.debug(f"NAUCHIL={self.y_teach}")
-        return dx + dx_adj, dy_taught
+            logger.debug(f"1dx={dx} and full dx_adj={dx_adj}")
+            logger.debug(f"1dy={dy} and full dx_adj={dy_adj}")
+
+        return (dx + dx_adj) * self.resource.mult_x, (dy + dy_adj) * self.resource.mult_y
 
     def approach_by_distance(self, dx: int, dy: int):
-        dx_step = 0
+        if dx == 0 and dy == 0:
+            return
+        dx_tolerated = dx - self.resource.tol_x if dx > 0 else dx + self.resource.tol_x
+        dy_tolerated = dy - self.resource.tol_y if dy > 0 else dy + self.resource.tol_y
+
         dy_step = 0
-        dx_in_ms, dy_in_ms = self.get_dx_dy(dx, dy)
+        dx_step = 0
+
+        dx_in_ms, dy_in_ms = self.get_dx_dy(dx_tolerated, dy_tolerated)
         # Y axis
-        if abs(dy) > DEFAULT_TOLERANCE_Y:
+        if abs(dy) > self.resource.tol_y:
             run(False, dy_in_ms)
             dy_step = dy
 
         # X axis
-        if abs(dx) > DEFAULT_TOLERANCE_X:
+        if abs(dx) > self.resource.tol_x:
             run(True, dx_in_ms)
             dx_step = dx
 

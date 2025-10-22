@@ -1,23 +1,22 @@
 from enum import Enum
 
-DEFAULT_TOLERANCE_Y = 300
-DEFAULT_TOLERANCE_X = 275
-
+DEFAULT_TOLERANCE_Y = 150
+DEFAULT_TOLERANCE_X = 150
 
 class Resource(Enum):
-    ANDRA_ENIGMITE = ("andra_enigmite", 1.2, 1.1, 3, 2, True)
-    BARU_ORE = ("baru_ore", 1.0, 1.0, 2, 2, True)
-    BARU_RICH_ORE = ("baru_rich_ore", 1.3, 1.2, 3, 3, True)
-    GREY_TOP_FLAX = ("grey-top_flax", 0.9, 1.1, 2, 1, False)
-    LIMESTONE = ("limestone", 1.0, 1.0, 1, 1, False)
-    LUNA_ORE = ("luna_ore", 1.1, 1.1, 2, 2, True)
-    LUNA_RICH_ORE = ("luna_rich_ore", 1.2, 1.2, 3, 3, True)
-    MEADOW_MUSHROOM = ("meadow_mushroom", 0.8, 1.0, 2, 2, True)
-    RICH_AZTE_ORE = ("rich_azte_ore", 1.4, 1.3, 3, 3, True)
-    RICH_STOKESITE_ORE = ("rich_stokesite_ore", 1.5, 1.4, 4, 4, True)
-    SWEET_BERRY = ("sweet_berry", 0.7, 0.9, 1, 2, True)
-    THIN_TWIG = ("thin_twig", 0.6, 0.6, 1, 1, True)
-    WHEAT = ("wheat", 0.7, 0.7, 1, 1, True)
+    BARU_RICH_ORE = ("baru_rich_ore", 1, 1, 200, 250, True)
+    ANDRA_ENIGMITE = ("andra_enigmite", 1, 1, DEFAULT_TOLERANCE_X, DEFAULT_TOLERANCE_Y, True)
+    BARU_ORE = ("baru_ore", 1, 1, DEFAULT_TOLERANCE_X, DEFAULT_TOLERANCE_Y, True)
+    GREY_TOP_FLAX = ("grey-top_flax", 1, 1, DEFAULT_TOLERANCE_X, DEFAULT_TOLERANCE_Y, False)
+    LIMESTONE = ("limestone", 1, 1, DEFAULT_TOLERANCE_X, DEFAULT_TOLERANCE_Y, False)
+    LUNA_ORE = ("luna_ore", 1, 1, DEFAULT_TOLERANCE_X, DEFAULT_TOLERANCE_Y, True)
+    LUNA_RICH_ORE = ("luna_rich_ore", 1, 1, DEFAULT_TOLERANCE_X, DEFAULT_TOLERANCE_Y, True)
+    MEADOW_MUSHROOM = ("meadow_mushroom", 1, 1, DEFAULT_TOLERANCE_X, DEFAULT_TOLERANCE_Y, True)
+    RICH_AZTE_ORE = ("rich_azte_ore", 1, 1, DEFAULT_TOLERANCE_X, DEFAULT_TOLERANCE_Y, True)
+    RICH_STOKESITE_ORE = ("rich_stokesite_ore", 1, 1, DEFAULT_TOLERANCE_X, DEFAULT_TOLERANCE_Y, True)
+    SWEET_BERRY = ("sweet_berry", 1, 1, DEFAULT_TOLERANCE_X, DEFAULT_TOLERANCE_Y, True)
+    THIN_TWIG = ("thin_twig", 1, 1, DEFAULT_TOLERANCE_X, DEFAULT_TOLERANCE_Y, True)
+    WHEAT = ("wheat", 1, 1, DEFAULT_TOLERANCE_X, DEFAULT_TOLERANCE_Y, True)
 
     def __init__(self, folder: str, mult_x: float, mult_y: float,
                  tol_x: int, tol_y: int, is_focus_needed: bool = True):

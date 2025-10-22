@@ -42,7 +42,6 @@ def key_up(key: str):
 
 
 def hold_key_ms(key: str, ms: int):
-    """Удержание клавиши на заданное кол-во миллисекунд."""
     if ms <= 0:
         return
     key_down(key)
@@ -75,6 +74,7 @@ def scroll_slow(steps: int = 1, unit: int = SCROLL_UNIT, delay: float = SCROLL_D
     for _ in range(max(0, steps)):
         pag.scroll(unit)
         time.sleep(delay)
+
 
 def _hide_unhide_ui():
     press_keys('ctrl', '\\')
