@@ -22,14 +22,14 @@ logger = logging.getLogger(__name__)
 class App:
     def __init__(self, root: tk.Tk):
         self.root = root
-        self.root.title("")
+        self.root.title("Blue Protocol: Star Resonance - Auto gathering")
         self.root.geometry("1400x800")
 
         base_dir = os.path.dirname(__file__)
         icon_path = os.path.join(base_dir, "assets", "app_icon.png")
         self._app_icon = tk.PhotoImage(file=icon_path)
         self.root.iconphoto(True, self._app_icon)
-        self.dark_mode = tk.BooleanVar(value=True)
+        self.dark_mode = tk.BooleanVar(value=False)
 
         self.want_gathering = tk.BooleanVar(value=True)
         self.status = tk.StringVar(value="Select the 'resources' folder, choose a resource, and pick the game window.")
@@ -76,133 +76,126 @@ class App:
         shell.columnconfigure(0, weight=1)
         shell.columnconfigure(1, weight=1)
 
-        # ===== Header =====
+        # ===== Header (title + toolbar) =====
         header = ttk.Frame(shell, style="Header.TFrame")
         header.grid(row=0, column=0, columnspan=2, sticky="ew", pady=(0, GUT))
-        header.columnconfigure(0, weight=1)  # left part grows
-        header.columnconfigure(1, weight=0)  # right controls
+        header.columnconfigure(0, weight=1)  # left grows
+        header.columnconfigure(1, weight=0)
 
-        # left: title + subtitle
-        left = ttk.Frame(header, style="Header.TFrame")
-        left.grid(row=0, column=0, sticky="w")
-        ttk.Label(left, text="Blue Protocol: Star Resonance - Auto gathering", style="Title.TLabel").grid(row=0, column=0, sticky="w")
-
-        # right: GitHub + theme toggle
+        # right: toolbar (theme, GitHub, Start/Stop)
         right = ttk.Frame(header, style="Header.TFrame")
-        right.grid(row=0, column=1, rowspan=2, sticky="e")
+        right.grid(row=0, column=1, sticky="e")
+        for i in range(6):
+            right.columnconfigure(i, weight=0)
 
-        # github icon (rightmost)
+        # theme toggle
+        if not hasattr(self, "dark_mode"):
+            self.dark_mode = tk.BooleanVar(value=dark)
+        theme_lbl = ttk.Label(right, style="Subtitle.TLabel", cursor="hand2")
+        theme_lbl.grid(row=0, column=0, padx=(0, 12), sticky="e")
+
+        # GitHub icon
         pal_bg = _palette(dark)["BG"]
         self._gh_img = _github_icon(dark)
         gh_btn = tk.Label(right, image=self._gh_img, bg=pal_bg, cursor="hand2")
-        gh_btn.grid(row=0, column=2, padx=(10, 0))
+        gh_btn.grid(row=0, column=1, padx=(0, 16), sticky="e")
         gh_btn.bind("<Button-1>", lambda e: webbrowser.open_new("https://github.com/ArtjomsBogatirjovs"))
         gh_btn.image = self._gh_img
-
-        # theme toggle (text is explicit; small and clear)
-        if not hasattr(self, "dark_mode"):
-            self.dark_mode = tk.BooleanVar(value=dark)
-
-        theme_lbl = ttk.Label(right, style="Subtitle.TLabel", cursor="hand2")
-        theme_lbl.grid(row=0, column=1, padx=(0, 6))
 
         def _refresh_header():
             theme_lbl.configure(text="🌙 Dark theme" if not self.dark_mode.get() else "☀️ Light theme")
             self._gh_img = _github_icon(self.dark_mode.get())
-            pal_bg2 = _palette(self.dark_mode.get())["BG"]
-            gh_btn.configure(image=self._gh_img, bg=pal_bg2)
+            pal2 = _palette(self.dark_mode.get())["BG"]
+            gh_btn.configure(image=self._gh_img, bg=pal2)
             gh_btn.image = self._gh_img
 
         def _toggle_theme(*_):
             _apply_style(self.root, self.dark_mode.get())
             _refresh_header()
 
-        # clickable label works like a button
         theme_lbl.bind("<Button-1>", lambda e: (self.dark_mode.set(not self.dark_mode.get()), _toggle_theme()))
-        _refresh_header()  # initial
+        _refresh_header()
 
         # ===== LEFT column =====
         resource_card = _card(shell, row=1, column=0, sticky="nsew", padx=(0, GUT))
         ttk.Label(resource_card, text="Resource", style="Card.Section.TLabel") \
             .grid(row=0, column=0, sticky="w", pady=(0, 6))
-        self.cmb = ttk.Combobox(
-            resource_card, style="Drop.TCombobox",
-            textvariable=self._selected_name, state="readonly", width=28, values=[]
-        )
+        self.cmb = ttk.Combobox(resource_card, style="Drop.TCombobox",
+                                textvariable=self._selected_name, state="readonly", width=28, values=[])
         self.cmb.grid(row=0, column=1, columnspan=3, sticky="ew", padx=(8, 0), pady=(0, 6))
 
-        ttk.Checkbutton(
-            resource_card, style="Card.TCheckbutton",
-            text='No-stamina mode (press only “Gathering”)',
-            variable=self.want_gathering
-        ).grid(row=1, column=0, columnspan=4, sticky="w", pady=(2, 0))
+        ttk.Checkbutton(resource_card, style="Card.TCheckbutton",
+                        text='No-stamina mode (press only “Gathering”)',
+                        variable=self.want_gathering) \
+            .grid(row=1, column=0, columnspan=4, sticky="w", pady=(2, 0))
+        ttk.Checkbutton(resource_card, style="Card.TCheckbutton",
+                        text="Run back to start after gathering",
+                        variable=self.run_back_to_start) \
+            .grid(row=2, column=0, columnspan=4, sticky="w", pady=(2, 0))
 
-        ttk.Checkbutton(
-            resource_card, style="Card.TCheckbutton",
-            text="Run back to start after gathering",
-            variable=self.run_back_to_start
-        ).grid(row=2, column=0, columnspan=4, sticky="w", pady=(2, 0))
-
+        # params
         params_card = _card(shell, row=2, column=0, sticky="nsew", pady=(GUT, 0), padx=(0, GUT))
         ttk.Label(params_card, text="X multiplier", style="Card.TLabel").grid(row=0, column=0, sticky="w")
-        ttk.Spinbox(params_card, style="Num.TSpinbox",
-                    from_=0.0, to=10.0, increment=0.1, width=10, textvariable=self.mult_x) \
-            .grid(row=0, column=1, sticky="w", padx=(8, 12))
+        ttk.Spinbox(params_card, style="Num.TSpinbox", from_=0.0, to=10.0, increment=0.1, width=10,
+                    textvariable=self.mult_x).grid(row=0, column=1, sticky="w", padx=(8, 12))
         ttk.Label(params_card, text="Y multiplier", style="Card.TLabel").grid(row=0, column=2, sticky="w")
-        ttk.Spinbox(params_card, style="Num.TSpinbox",
-                    from_=0.0, to=10.0, increment=0.1, width=10, textvariable=self.mult_y) \
-            .grid(row=0, column=3, sticky="w", padx=(8, 0))
+        ttk.Spinbox(params_card, style="Num.TSpinbox", from_=0.0, to=10.0, increment=0.1, width=10,
+                    textvariable=self.mult_y).grid(row=0, column=3, sticky="w", padx=(8, 0))
 
         ttk.Label(params_card, text="X tolerance", style="Card.TLabel").grid(row=1, column=0, sticky="w", pady=(8, 0))
-        ttk.Spinbox(params_card, style="Num.TSpinbox",
-                    from_=0, to=1000, increment=1, width=10, textvariable=self.tol_x) \
-            .grid(row=1, column=1, sticky="w", padx=(8, 12), pady=(8, 0))
+        ttk.Spinbox(params_card, style="Num.TSpinbox", from_=0, to=1000, increment=1, width=10,
+                    textvariable=self.tol_x).grid(row=1, column=1, sticky="w", padx=(8, 12), pady=(8, 0))
         ttk.Label(params_card, text="Y tolerance", style="Card.TLabel").grid(row=1, column=2, sticky="w", pady=(8, 0))
-        ttk.Spinbox(params_card, style="Num.TSpinbox",
-                    from_=0, to=1000, increment=1, width=10, textvariable=self.tol_y) \
-            .grid(row=1, column=3, sticky="w", padx=(8, 0), pady=(8, 0))
+        ttk.Spinbox(params_card, style="Num.TSpinbox", from_=0, to=1000, increment=1, width=10,
+                    textvariable=self.tol_y).grid(row=1, column=3, sticky="w", padx=(8, 0), pady=(8, 0))
 
         ttk.Label(params_card, text="Gathering speed", style="Card.TLabel").grid(row=2, column=0, sticky="w",
                                                                                  pady=(10, 0))
-        self.speed_cmb = ttk.Combobox(
-            params_card, style="Drop.TCombobox",
-            state="readonly", width=16, textvariable=self.gathering_speed,
-            values=[level.name for level in GatheringSpeedLevel]
-        )
+        self.speed_cmb = ttk.Combobox(params_card, style="Drop.TCombobox", state="readonly", width=16,
+                                      textvariable=self.gathering_speed,
+                                      values=[level.name for level in GatheringSpeedLevel])
         self.speed_cmb.grid(row=2, column=1, sticky="w", padx=(8, 0), pady=(10, 0))
 
         # ===== RIGHT column =====
         window_card = _card(shell, row=1, column=1, sticky="nsew")
         ttk.Label(window_card, text="Target window", style="Card.TLabel").grid(row=0, column=0, sticky="w")
-        self.win_cmb = ttk.Combobox(
-            window_card, style="Drop.TCombobox",
-            textvariable=self._selected_win, state="readonly", width=36, values=[]
-        )
+        self.win_cmb = ttk.Combobox(window_card, style="Drop.TCombobox",
+                                    textvariable=self._selected_win, state="readonly", width=36, values=[])
         self.win_cmb.grid(row=0, column=1, sticky="ew", padx=(8, 0))
-        ttk.Button(window_card, text="↻ Refresh", command=self.refresh_windows) \
-            .grid(row=0, column=2, sticky="e", padx=(8, 0))
+        ttk.Button(window_card, text="↻ Refresh", command=self.refresh_windows).grid(row=0, column=2, sticky="e",
+                                                                                     padx=(8, 0))
 
         ttk.Label(window_card, text="Aspect ratio", style="Card.TLabel").grid(row=1, column=0, sticky="w", pady=(10, 0))
-        aspect_cb = ttk.Combobox(
-            window_card, style="Drop.TCombobox",
-            textvariable=self.aspect_ratio, values=[str(r) for r in AspectRatio],
-            state="readonly", width=12
-        )
+        aspect_cb = ttk.Combobox(window_card, style="Drop.TCombobox", textvariable=self.aspect_ratio,
+                                 values=[str(r) for r in AspectRatio], state="readonly", width=12)
         aspect_cb.grid(row=1, column=1, sticky="w", padx=(8, 0), pady=(10, 0))
 
+        # actions
         actions_card = _card(shell, row=2, column=1, sticky="nsew", pady=(GUT, 0))
-        self.btn_start = ttk.Button(actions_card, text="▶ Start", command=self.start, style="Primary.TButton", width=14)
-        self.btn_start.grid(row=0, column=0, sticky="w")
-        self.btn_stop = ttk.Button(actions_card, text="■ Stop", command=self.stop, state="disabled", width=14)
-        self.btn_stop.grid(row=0, column=1, sticky="w", padx=(8, 0))
 
-        ttk.Separator(actions_card, orient="horizontal").grid(row=1, column=0, columnspan=4, sticky="ew", pady=(12, 6))
-        ttk.Label(actions_card, textvariable=self.status, style="Status.TLabel") \
-            .grid(row=2, column=0, columnspan=4, sticky="w")
+        # ===== Footer status bar =====
+        footer = ttk.Frame(shell, padding=(8, 6))
+        footer.grid(row=3, column=0, columnspan=2, sticky="ew", pady=(GUT, 0))
 
-        # expand rules
+        footer.columnconfigure(0, weight=0)
+        footer.columnconfigure(1, weight=0)
+        footer.columnconfigure(2, weight=1)
+
+        # start/stop
+        self.btn_start = ttk.Button(footer, text="▶ Start", command=self.start, style="Primary.TButton", width=12)
+        self.btn_start.grid(row=0, column=0, sticky="w", padx=(0, 6))
+
+        self.btn_stop = ttk.Button(footer, text="■ Stop", command=self.stop, state="disabled", width=10)
+        self.btn_stop.grid(row=0, column=1, sticky="w", padx=(0, 12))
+
+        #Status
+        ttk.Label(footer, textvariable=self.status, style="Status.TLabel") \
+            .grid(row=0, column=2, sticky="e")
+
+        # expand
         shell.rowconfigure(1, weight=1)
         shell.rowconfigure(2, weight=1)
+        shell.rowconfigure(3, weight=0)
         shell.columnconfigure(0, weight=1)
         shell.columnconfigure(1, weight=1)
 
