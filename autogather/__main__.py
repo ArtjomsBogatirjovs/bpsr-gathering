@@ -1,7 +1,7 @@
 import logging
 import tkinter as tk
 
-from .ui import App
+from autogather.ui.ui import App
 
 
 def main():
