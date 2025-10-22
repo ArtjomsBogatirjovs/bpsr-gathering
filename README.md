@@ -1,7 +1,7 @@
-# AutoHarvest BPSR
+# Blue Protocol: Star Resonance - Auto gathering
 ![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)
 
-**AutoHarvest BPSR** — a GUI-based automation tool for gathering resources in **Blue Protocol: Star Resonance**.  
+GUI-based automation tool for gathering resources in **Blue Protocol: Star Resonance**.  
 The tool simulates user input (mouse/keyboard) and detects on-screen elements using images from the `/resources`
 folder.  
 It does **not** read or modify game memory and does **not** inject into the client.
