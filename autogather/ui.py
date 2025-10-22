@@ -43,111 +43,117 @@ class App:
         self._updating_fields = False
 
         self.aspect_ratio = tk.StringVar(value=str(AspectRatio.RATIO_21_9))
-
-        # new: gathering speed level
         self.gathering_speed = tk.StringVar(value=GatheringSpeedLevel.FAST.name)
-
-        # new: run back to start after gathering
         self.run_back_to_start = tk.BooleanVar(value=False)
 
-        # --- UI ---
-        frm = ttk.Frame(root, padding=12)
-        frm.grid(row=0, column=0, sticky="nsew")
-        root.columnconfigure(0, weight=1)
-        root.rowconfigure(0, weight=1)
+        # build UI (new)
+        self._build_ui()
 
-        # ============================
-        # TOP BLOCK: Main settings
-        main_frame = ttk.LabelFrame(frm, text="Main settings", padding=10)
-        main_frame.grid(row=0, column=0, columnspan=2, sticky="ew", pady=(0, 10))
-
-        ttk.Label(main_frame, text="Resource:").grid(row=0, column=0, sticky="w")
-        self.cmb = ttk.Combobox(main_frame, textvariable=self._selected_name, values=[], state="readonly", width=32)
-        self.cmb.grid(row=0, column=1, columnspan=2, sticky="ew", padx=6)
-
-        ttk.Label(main_frame, text="Target window:").grid(row=1, column=0, sticky="w")
-        self.win_cmb = ttk.Combobox(main_frame, textvariable=self._selected_win, values=[], state="readonly", width=40)
-        self.win_cmb.grid(row=1, column=1, sticky="ew", padx=6)
-        ttk.Button(main_frame, text="Refresh windows", command=self.refresh_windows).grid(row=1, column=2, padx=4)
-
-        # new: gathering speed combobox (row=2)
-        ttk.Label(main_frame, text="Gathering speed:").grid(row=2, column=0, sticky="w")
-        self.speed_cmb = ttk.Combobox(
-            main_frame,
-            state="readonly",
-            width=12,
-            textvariable=self.gathering_speed,
-            values=[level.name for level in GatheringSpeedLevel],  # shows SLOW / NORMAL / FAST
-        )
-        self.speed_cmb.grid(row=2, column=1, sticky="w", padx=6)
-
-        # --- Resource params (row=6..7) ---
-        ttk.Label(main_frame, text="mult_x:").grid(row=6, column=0, sticky="w")
-        ttk.Spinbox(main_frame, from_=0.0, to=10.0, increment=0.1,
-                    textvariable=self.mult_x, width=8).grid(row=6, column=1, sticky="w", padx=6)
-
-        ttk.Label(main_frame, text="mult_y:").grid(row=6, column=2, sticky="w")
-        ttk.Spinbox(main_frame, from_=0.0, to=10.0, increment=0.1,
-                    textvariable=self.mult_y, width=8).grid(row=6, column=3, sticky="w", padx=6)
-
-        ttk.Label(main_frame, text="tol_x:").grid(row=7, column=0, sticky="w")
-        ttk.Spinbox(main_frame, from_=0, to=500, increment=1,
-                    textvariable=self.tol_x, width=8).grid(row=7, column=1, sticky="w", padx=6)
-
-        ttk.Label(main_frame, text="tol_y:").grid(row=7, column=2, sticky="w")
-        ttk.Spinbox(main_frame, from_=0, to=500, increment=1,
-                    textvariable=self.tol_y, width=8).grid(row=7, column=3, sticky="w", padx=6)
-
+        # bindings
         self.cmb.bind("<<ComboboxSelected>>", self._on_resource_selected)
 
-        ttk.Checkbutton(
-            main_frame,
-            text="No-stamina mode → press only “Gathering”",
-            variable=self.want_gathering
-        ).grid(row=3, column=0, columnspan=3, sticky="w", pady=(6, 2))
-
-        self.btn_start = ttk.Button(main_frame, text="▶ Start", command=self.start)
-        self.btn_start.grid(row=4, column=0, pady=(10, 4))
-        self.btn_stop = ttk.Button(main_frame, text="■ Stop", command=self.stop, state="disabled")
-        self.btn_stop.grid(row=4, column=1, pady=(10, 4))
-
-        ttk.Label(main_frame, textvariable=self.status, foreground="#666") \
-            .grid(row=5, column=0, columnspan=3, sticky="w", pady=(8, 0))
-
-        # ============================
-        # LOWER BLOCKS
-        roi_frame = ttk.LabelFrame(frm, text="ROI setup (prompt [F])", padding=10)
-        roi_frame.grid(row=1, column=0, sticky="nsew", padx=(0, 10))
-
-        ttk.Label(roi_frame, text="Aspect ratio:").grid(row=2, column=0, sticky="w")
-        aspect_cb = ttk.Combobox(
-            roi_frame,
-            textvariable=self.aspect_ratio,
-            values=[str(r) for r in AspectRatio],
-            state="readonly",
-            width=6
-        )
-        aspect_cb.grid(row=2, column=1, sticky="w")
-
-        # Advanced
-        extra_frame = ttk.LabelFrame(frm, text="Advanced", padding=10)
-        extra_frame.grid(row=1, column=1, sticky="nsew")
-
-        # new: run back to start checkbox
-        ttk.Checkbutton(
-            extra_frame,
-            text="Run back to start after gathering",
-            variable=self.run_back_to_start
-        ).grid(row=0, column=0, sticky="w")
-
-        frm.columnconfigure(0, weight=1)
-        frm.columnconfigure(1, weight=1)
-
-        # ============================
-        # Initialization
+        # init
         self.rescan()
         self.refresh_windows()
         self._tick()
+
+    def _build_ui(self):
+        PAD, GUT = 12, 8
+
+        # base frame
+        frm = ttk.Frame(self.root, padding=PAD)
+        frm.grid(row=0, column=0, sticky="nsew")
+        self.root.columnconfigure(0, weight=1)
+        self.root.rowconfigure(0, weight=1)
+        frm.columnconfigure(0, weight=1)
+        frm.columnconfigure(1, weight=1)
+
+        # ========== LEFT COLUMN ==========
+        # Resource block
+        resource_frame = ttk.LabelFrame(frm, text="Resource", padding=PAD)
+        resource_frame.grid(row=0, column=0, sticky="nsew", padx=(0, GUT))
+        resource_frame.columnconfigure(1, weight=1)
+
+        ttk.Label(resource_frame, text="Resource:").grid(row=0, column=0, sticky="w", pady=(0, 4))
+        self.cmb = ttk.Combobox(resource_frame, textvariable=self._selected_name, state="readonly", width=28, values=[])
+        self.cmb.grid(row=0, column=1, sticky="ew", padx=(6,0), pady=(0, 4))
+
+        ttk.Checkbutton(
+            resource_frame,
+            text="No-stamina mode (press only “Gathering”)",
+            variable=self.want_gathering
+        ).grid(row=1, column=0, columnspan=2, sticky="w", pady=(4,0))
+
+        ttk.Checkbutton(
+            resource_frame,
+            text="Run back to start after gathering",
+            variable=self.run_back_to_start
+        ).grid(row=2, column=0, columnspan=2, sticky="w", pady=(4,0))
+
+        # Parameters block
+        params_frame = ttk.LabelFrame(frm, text="Parameters", padding=PAD)
+        params_frame.grid(row=1, column=0, sticky="nsew", padx=(0, GUT), pady=(GUT, 0))
+        for c in range(4):
+            params_frame.columnconfigure(c, weight=1)
+
+        # row 0: multipliers
+        ttk.Label(params_frame, text="X multiplier").grid(row=0, column=0, sticky="w")
+        ttk.Spinbox(params_frame, from_=0.0, to=10.0, increment=0.1, width=8,
+                    textvariable=self.mult_x).grid(row=0, column=1, sticky="w", padx=(6, 12))
+        ttk.Label(params_frame, text="Y multiplier").grid(row=0, column=2, sticky="w")
+        ttk.Spinbox(params_frame, from_=0.0, to=10.0, increment=0.1, width=8,
+                    textvariable=self.mult_y).grid(row=0, column=3, sticky="w", padx=(6, 0))
+
+        # row 1: tolerances
+        ttk.Label(params_frame, text="X tolerance").grid(row=1, column=0, sticky="w", pady=(6,0))
+        ttk.Spinbox(params_frame, from_=0, to=1000, increment=1, width=8,
+                    textvariable=self.tol_x).grid(row=1, column=1, sticky="w", padx=(6, 12), pady=(6,0))
+        ttk.Label(params_frame, text="Y tolerance").grid(row=1, column=2, sticky="w", pady=(6,0))
+        ttk.Spinbox(params_frame, from_=0, to=1000, increment=1, width=8,
+                    textvariable=self.tol_y).grid(row=1, column=3, sticky="w", padx=(6, 0), pady=(6,0))
+
+        # row 2: speed
+        ttk.Label(params_frame, text="Gathering speed").grid(row=2, column=0, sticky="w", pady=(10,0))
+        self.speed_cmb = ttk.Combobox(params_frame, state="readonly", width=14,
+                                      textvariable=self.gathering_speed,
+                                      values=[level.name for level in GatheringSpeedLevel])
+        self.speed_cmb.grid(row=2, column=1, sticky="w", padx=(6,0), pady=(10,0))
+
+        # ========== RIGHT COLUMN ==========
+        # Window block
+        window_frame = ttk.LabelFrame(frm, text="Window", padding=PAD)
+        window_frame.grid(row=0, column=1, sticky="nsew")
+        window_frame.columnconfigure(1, weight=1)
+
+        ttk.Label(window_frame, text="Target window").grid(row=0, column=0, sticky="w", pady=(0, 4))
+        self.win_cmb = ttk.Combobox(window_frame, textvariable=self._selected_win, state="readonly", width=36, values=[])
+        self.win_cmb.grid(row=0, column=1, sticky="ew", padx=(6,0), pady=(0, 4))
+        ttk.Button(window_frame, text="Refresh", command=self.refresh_windows) \
+            .grid(row=0, column=2, sticky="e", padx=(6,0))
+
+        ttk.Label(window_frame, text="Aspect ratio").grid(row=1, column=0, sticky="w", pady=(8,0))
+        aspect_cb = ttk.Combobox(window_frame, textvariable=self.aspect_ratio,
+                                 values=[str(r) for r in AspectRatio],
+                                 state="readonly", width=10)
+        aspect_cb.grid(row=1, column=1, sticky="w", padx=(6,0), pady=(8,0))
+
+        # Actions block
+        actions_frame = ttk.LabelFrame(frm, text="Actions", padding=PAD)
+        actions_frame.grid(row=1, column=1, sticky="nsew", pady=(GUT, 0))
+        actions_frame.columnconfigure(0, weight=0)
+        actions_frame.columnconfigure(1, weight=1)
+
+        self.btn_start = ttk.Button(actions_frame, text="▶ Start", command=self.start, width=12)
+        self.btn_start.grid(row=0, column=0, sticky="w")
+
+        self.btn_stop = ttk.Button(actions_frame, text="■ Stop", command=self.stop, state="disabled", width=12)
+        self.btn_stop.grid(row=0, column=1, sticky="w", padx=(8,0))
+
+        ttk.Separator(actions_frame, orient="horizontal").grid(row=1, column=0, columnspan=2, sticky="ew", pady=(10,6))
+
+        ttk.Label(actions_frame, textvariable=self.status, foreground="#666") \
+            .grid(row=2, column=0, columnspan=2, sticky="w")
+
 
     def get_gathering_speed(self) -> GatheringSpeedLevel:
         return GatheringSpeedLevel[self.gathering_speed.get()]
@@ -190,10 +196,10 @@ class App:
         if arr:
             if self._selected_win.get() not in [t for t, _ in arr]:
                 self._selected_win.set(arr[0][0])
-            self.status.set(f"Нашёл окон: {len(arr)}")
+            self.status.set(f"Found applications: {len(arr)}")
         else:
             self._selected_win.set("")
-            self.status.set("Окна не найдены. Открой игру в окне/borderless.")
+            self.status.set("Game not found. Please open the game window.")
 
     def _selected_hwnd(self) -> Optional[int]:
         disp = self._selected_win.get().strip()
@@ -202,28 +208,29 @@ class App:
                 return h
         return None
 
-    # -------- старт/стоп --------
     def start(self):
         if self.worker and self.worker.is_alive():
             return
 
         name = self._selected_name.get().strip()
         if not name or name not in self._name_to_res:
-            messagebox.showerror("Нет ресурса", "Выбери ресурс из списка.")
+            messagebox.showerror("No resource", "Select a resource from the list.")
             return
+
         resource_enum = self._name_to_res[name]
         try:
             self.ts_f, self.ts_g, self.ts_s, self.ts_r = load_resource_dir(resource_enum.folder_name, resource_enum)
         except Exception as e:
-            messagebox.showerror("Ошибка загрузки", str(e))
+            messagebox.showerror("Loading error", str(e))
             return
+
         if not (self.ts_g.tmps and self.ts_s.tmps) or (not self.ts_f.tmps and resource_enum.is_focus_needed):
-            messagebox.showerror("Нет шаблонов", "В одной из подпапок нет изображений.")
+            messagebox.showerror("No templates", "One or more required template folders are empty.")
             return
 
         hwnd = self._selected_hwnd()
         if not hwnd:
-            messagebox.showerror("Нет окна", "Выбери целевое окно игры из списка.")
+            messagebox.showerror("No window", "Select a game window from the list.")
             return
 
         try:
@@ -234,7 +241,7 @@ class App:
         try:
             self.screen = WindowScreen(hwnd)
         except Exception as e:
-            messagebox.showerror("Error screen loading", str(e))
+            messagebox.showerror("Screen error", str(e))
             return
 
         # Create main loop
@@ -250,7 +257,8 @@ class App:
         self.worker.start()
         self.btn_start.configure(state="disabled")
         self.btn_stop.configure(state="normal")
-        self.status.set(f"Запущено: {name} | окно: {self._selected_win.get()}")
+        self.status.set(f"Started: {name} | Window: {self._selected_win.get()}")
+
 
     def create_resource(self):
         return ResourceObject(self.resource.folder_name, self.mult_x.get(), self.mult_y.get(), self.tol_x.get(),
