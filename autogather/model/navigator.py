@@ -47,15 +47,15 @@ class Navigator:
 
     def _calc_adjustment_y(self, value: float) -> float:
         a = abs(value)
-        if a > 2500: return value * 0.75
+        if a > 2500: return value * 0.72
         if a > 2250: return value * 0.70
         if a > 1750: return value * 0.64
-        if a > 1500: return value * 0.57
-        if a > 1250: return value * 0.70
-        if a > 1000: return value * 0.74
-        if a > 750:  return value * 0.76
-        if a > 500:  return value * 0.73
-        if a > 250:  return value * 0.51
+        if a > 1500: return value * 0.6
+        if a > 1250: return value * 0.72
+        if a > 1000: return value * 0.8
+        if a > 750:  return value * 0.74
+        if a > 500:  return value * 0.7
+        if a > 250:  return value * 0.7
         return 0.0
 
     def get_dx_dy(self, dx, dy):

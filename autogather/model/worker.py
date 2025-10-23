@@ -4,26 +4,26 @@ import time
 
 import cv2
 
-from autogather.enums.aspect_ratio import AspectRatio
 from autogather.config import (
     SCALES, MATCH_THRESHOLD,
     ACTION_COOLDOWN, ALIGN_TOLERANCE,
     SCROLL_UNIT, MAX_SCROLL_STEPS,
     RESOURCE_THRESHOLD
 )
+from autogather.enums.aspect_ratio import AspectRatio
 from autogather.enums.gathering_speed import GatheringSpeedLevel
 from autogather.input_sim import press_key, scroll_once, _hide_unhide_ui
 from autogather.model.navigator import Navigator
 from autogather.model.resource_model import ResourceObject
-from autogather.screen import _get_roi_f
 from autogather.model.templates import TemplateSet
 from autogather.model.waypoints import WaypointDB
+from autogather.screen import _get_roi_f
 
 
 class Worker(threading.Thread):
     def __init__(self, screen, ts_focus: TemplateSet, ts_gath: TemplateSet,
                  ts_sel: TemplateSet, ts_res: TemplateSet, want_gathering: bool, ratio: AspectRatio,
-                 gathering_speed: GatheringSpeedLevel, resource: ResourceObject, run_to_start: bool):
+                 gathering_speed: GatheringSpeedLevel, resource: ResourceObject, move_to_start: bool, dont_move: bool):
         super().__init__(daemon=True)
         self.screen = screen
         self.ts_focus = ts_focus
@@ -35,7 +35,8 @@ class Worker(threading.Thread):
         self.state = "idle"
         self._last_action = 0.0
         self.gathering_speed = gathering_speed
-        self.run_to_start = run_to_start
+        self.move_to_start = move_to_start
+        self.dont_move = dont_move
 
         self.waypoints = WaypointDB()
         self.nav = Navigator(resource)
@@ -48,9 +49,12 @@ class Worker(threading.Thread):
         while not self._stop.is_set():
             if self.check_f_and_perform():
                 continue
-            if self.run_to_start:
-                self._run_to_start()
-            # 0) Если есть «готовый» узел — бежим к нему напрямую (без поиска)
+            if self.dont_move:
+                time.sleep(3)
+                continue
+            if self.move_to_start:
+                self._move_to_start()
+            # 0) If waypoint exists, move to it:
             wp = self.waypoints.next_available(self.nav.pos_x, self.nav.pos_y)
             if wp is not None:
                 self.state = f"to waypoint → ({wp.x},{wp.y})"
@@ -59,15 +63,14 @@ class Worker(threading.Thread):
                 time.sleep(1)
                 self.check_f_and_perform()
                 continue
-
-            # 1) ЕСЛИ подсказок НЕТ — ищем саму руду на всём кадре по отдельным шаблонам
+            # 1) Measure resource offset:
             hit_obj, dx, dy = self._measure_resource_offset()
             if hit_obj:
                 self.nav.approach_by_distance(dx, dy)
                 self.check_f_and_perform()
                 time.sleep(1)
 
-    def _run_to_start(self):
+    def _move_to_start(self):
         self.nav.approach_by_distance(self.nav.pos_x * -1, self.nav.pos_y * -1)
         self.check_f_and_perform()
 
@@ -123,10 +126,6 @@ class Worker(threading.Thread):
         self.waypoints.add_or_update(self.nav.pos_x, self.nav.pos_y)
 
     def _measure_resource_offset(self):
-        """
-        Переизмерить смещение руды относительно центра кадра.
-        Возвращает (found: bool, dx: int, dy: int).
-        """
         if not self.ts_resource:
             return False, 0, 0
         frame = self.screen.grab_bgr()
@@ -159,7 +158,8 @@ class Worker(threading.Thread):
             time.sleep(0.05)
             return True
 
-        hit_button_f = (hit_g and hit_s and self._selector_on_gathering(hit_f, hit_g, hit_s)) or not self.want_gathering or not self.res.is_focus_needed
+        hit_button_f = (hit_g and hit_s and self._selector_on_gathering(hit_f, hit_g,
+                                                                        hit_s)) or not self.want_gathering or not self.res.is_focus_needed
         if hit_button_f:
             self.press_f_key()
             return True

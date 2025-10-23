@@ -53,7 +53,8 @@ class App:
 
         self.aspect_ratio = tk.StringVar(value=str(AspectRatio.RATIO_21_9))
         self.gathering_speed = tk.StringVar(value=GatheringSpeedLevel.FAST.name)
-        self.run_back_to_start = tk.BooleanVar(value=False)
+        self.move_back_to_start = tk.BooleanVar(value=False)
+        self.dont_move = tk.BooleanVar(value=False)
 
         self._build_ui()
 
@@ -125,13 +126,17 @@ class App:
         self.cmb.grid(row=0, column=1, columnspan=3, sticky="ew", padx=(8, 0), pady=(0, 6))
 
         ttk.Checkbutton(resource_card, style="Card.TCheckbutton",
-                        text='No-stamina mode (press only “Gathering”)',
+                        text='No-stamina mode (press only “Normal”)',
                         variable=self.want_gathering) \
             .grid(row=1, column=0, columnspan=4, sticky="w", pady=(2, 0))
         ttk.Checkbutton(resource_card, style="Card.TCheckbutton",
-                        text="Run back to start after gathering",
-                        variable=self.run_back_to_start) \
+                        text="Don’t move. Stay in one spot.",
+                        variable=self.dont_move) \
             .grid(row=2, column=0, columnspan=4, sticky="w", pady=(2, 0))
+        ttk.Checkbutton(resource_card, style="Card.TCheckbutton",
+                        text="Run back to start after gathering",
+                        variable=self.move_back_to_start) \
+            .grid(row=3, column=0, columnspan=4, sticky="w", pady=(2, 0))
 
         # params
         params_card = _card(shell, row=2, column=0, sticky="nsew", pady=(GUT, 0), padx=(0, GUT))
@@ -188,7 +193,7 @@ class App:
         self.btn_stop = ttk.Button(footer, text="■ Stop", command=self.stop, state="disabled", width=10)
         self.btn_stop.grid(row=0, column=1, sticky="w", padx=(0, 12))
 
-        #Status
+        # Status
         ttk.Label(footer, textvariable=self.status, style="Status.TLabel") \
             .grid(row=0, column=2, sticky="e")
 
@@ -295,7 +300,8 @@ class App:
             self.get_selected_aspect_ratio(),
             self.get_gathering_speed(),
             self.create_resource(),
-            self.run_back_to_start.get()
+            self.move_back_to_start.get(),
+            self.dont_move.get()
         )
         self.worker.start()
         self.btn_start.configure(state="disabled")
