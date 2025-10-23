@@ -71,21 +71,24 @@ class Navigator:
     def approach_by_distance(self, dx: int, dy: int):
         if dx == 0 and dy == 0:
             return
-        dx_tolerated = dx - self.resource.tol_x if dx > 0 else dx + self.resource.tol_x
-        dy_tolerated = dy - self.resource.tol_y if dy > 0 else dy + self.resource.tol_y
+        dx_tolerated = dx - self.resource.get_tol_x() if dx > 0 else dx + self.resource.get_tol_x()
+        dy_tolerated = dy - self.resource.get_tol_y() if dy > 0 else dy + self.resource.get_tol_y()
 
         dy_step = 0
         dx_step = 0
 
         dx_in_ms, dy_in_ms = self.get_dx_dy(dx_tolerated, dy_tolerated)
         # Y axis
-        if abs(dy) > self.resource.tol_y:
+        if abs(dy) > self.resource.get_tol_y():
             run(False, dy_in_ms)
             dy_step = dy
 
         # X axis
-        if abs(dx) > self.resource.tol_x:
+        if abs(dx) > self.resource.get_tol_x():
             run(True, dx_in_ms)
             dx_step = dx
 
         self._apply_step(dx_step, dy_step)
+
+    def is_start_position(self):
+        return self.pos_x == 0 and self.pos_y == 0

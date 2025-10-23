@@ -10,8 +10,6 @@ from .winutil import get_window_rect
 
 
 class WindowScreen:
-    """Захват прямоугольника конкретного окна."""
-
     def __init__(self, hwnd: int):
         self.hwnd = int(hwnd)
         self._tls = threading.local()
@@ -37,11 +35,6 @@ class WindowScreen:
 
 def roi_convert(roi: tuple[float, float, float, float], x_ratio: int, y_ratio: int) -> tuple[
     float, float, float, float]:
-    """
-    Конвертирует ROI из 16:9 в новый аспект (например, 21:9).
-    Сохраняем прямоугольник по центру экрана: добавленные поля по бокам
-    равномерно распределяются.
-    """
     x1, y1, x2, y2 = roi
 
     w_from, h_from = 16, 9

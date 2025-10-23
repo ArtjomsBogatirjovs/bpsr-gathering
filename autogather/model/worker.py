@@ -13,7 +13,7 @@ from autogather.config import (
 from autogather.enums.aspect_ratio import AspectRatio
 from autogather.enums.gathering_speed import GatheringSpeedLevel
 from autogather.input_sim import press_key, scroll_once, _hide_unhide_ui
-from autogather.model.navigator import Navigator
+from autogather.model.navigator import Navigator, run
 from autogather.model.resource_model import ResourceObject
 from autogather.model.templates import TemplateSet
 from autogather.model.waypoints import WaypointDB
@@ -71,8 +71,11 @@ class Worker(threading.Thread):
                 time.sleep(1)
 
     def _move_to_start(self):
+        is_on_start = self.nav.is_start_position()
         self.nav.approach_by_distance(self.nav.pos_x * -1, self.nav.pos_y * -1)
         self.check_f_and_perform()
+        if not is_on_start:
+            run(False, -1)
 
     # ---- helpers ----
     def stop(self):

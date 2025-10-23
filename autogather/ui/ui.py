@@ -6,13 +6,15 @@ import webbrowser
 from tkinter import ttk, messagebox
 from typing import Optional, Tuple, List
 
+from autogather.config import PROMPT_ROI
+from autogather.debug import save_roi_debug
 from autogather.enums.aspect_ratio import AspectRatio
 from autogather.enums.gathering_speed import GatheringSpeedLevel
 from autogather.enums.resource import Resource, DEFAULT_TOLERANCE_X, DEFAULT_TOLERANCE_Y
 from autogather.folder_utils import scan_resources, load_resource_dir
 from autogather.model.resource_model import ResourceObject
 from autogather.model.worker import Worker
-from autogather.screen import WindowScreen
+from autogather.screen import WindowScreen, _get_roi_f
 from autogather.ui.ui_utils import _apply_style, _card, _github_icon, _palette
 from autogather.winutil import list_windows, bring_to_foreground
 
@@ -175,8 +177,16 @@ class App:
                                  values=[str(r) for r in AspectRatio], state="readonly", width=12)
         aspect_cb.grid(row=1, column=1, sticky="w", padx=(8, 0), pady=(10, 0))
 
-        # actions
+        # ===== DEBUG SECTION =====
         actions_card = _card(shell, row=2, column=1, sticky="nsew", pady=(GUT, 0))
+        ttk.Label(actions_card, text="Debug", style="Card.Section.TLabel") \
+            .grid(row=0, column=0, sticky="w", pady=(0, 6))
+
+        ttk.Button(
+            actions_card,
+            text="Debug selector menu",
+            command=self._debug_selector_menu
+        ).grid(row=1, column=0, sticky="w", padx=(0, 6), pady=(0, 6))
 
         # ===== Footer status bar =====
         footer = ttk.Frame(shell, padding=(8, 6))
@@ -203,6 +213,19 @@ class App:
         shell.rowconfigure(3, weight=0)
         shell.columnconfigure(0, weight=1)
         shell.columnconfigure(1, weight=1)
+
+    def _debug_selector_menu(self):
+        if not self.screen:
+            hwnd = self._selected_hwnd()
+            if not hwnd:
+                messagebox.showerror("No window", "Select target window from the list.")
+                return
+            self.screen = WindowScreen(hwnd)
+
+        roi_val = PROMPT_ROI
+        roi, roi_tuple = _get_roi_f(self.screen, self.get_selected_aspect_ratio(), roi_val)
+        save_roi_debug(self.screen.grab_bgr(), roi_tuple)
+        self.status.set("Selector debug saved (roi_debug.png)")
 
     def get_gathering_speed(self) -> GatheringSpeedLevel:
         return GatheringSpeedLevel[self.gathering_speed.get()]

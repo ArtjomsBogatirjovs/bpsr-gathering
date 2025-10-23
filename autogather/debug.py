@@ -1,6 +1,8 @@
-import cv2
-import os
 import logging
+import os
+
+import cv2
+
 logger = logging.getLogger(__name__)
 
 def save_roi_debug(frame, roi_coords, filename="roi_debug.png"):

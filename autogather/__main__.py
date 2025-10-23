@@ -6,7 +6,7 @@ from autogather.ui.ui import App
 
 def main():
     logging.basicConfig(
-        level=logging.DEBUG,  # или INFO, если надо меньше
+        level=logging.DEBUG,
         format="%(asctime)s [%(levelname)s] %(name)s: %(message)s"
     )
     root = tk.Tk()
