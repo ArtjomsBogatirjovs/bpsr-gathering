@@ -37,9 +37,9 @@ def resource_has_required_folders(resource_dir: str, res: Resource) -> bool:
 
 
 def load_resource_dir(resource_dir: str, res: Resource):
-    resource_dir = RESOURCES_ROOT_DEFAULT + "/" +resource_dir
+    resource_dir = RESOURCES_ROOT_DEFAULT + "/" + resource_dir
     if not os.path.isdir(resource_dir):
-        raise FileNotFoundError(f"Папка ресурса не найдена: {resource_dir}")
+        raise FileNotFoundError(f"Resource folder not found: {resource_dir}")
     dir_f = _pick_subdir(resource_dir, REQUIRED_FOLDERS[0])
     dir_g = _pick_subdir(resource_dir, REQUIRED_FOLDERS[1])
     dir_s = _pick_subdir(resource_dir, REQUIRED_FOLDERS[2])
@@ -50,7 +50,7 @@ def load_resource_dir(resource_dir: str, res: Resource):
     if not dir_s: missing.append(REQUIRED_FOLDERS[2] + "/")
     if not dir_r: missing.append(REQUIRED_FOLDERS[3] + "/")
     if missing:
-        raise FileNotFoundError(f"В {resource_dir} нет подпапок: {', '.join(missing)}")
+        raise FileNotFoundError(f"In {resource_dir} no subfolders: {', '.join(missing)}")
     return TemplateSet(dir_f), TemplateSet(dir_g), TemplateSet(dir_s), TemplateSet(dir_r)
 
 

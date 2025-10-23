@@ -7,6 +7,7 @@ from autogather.config import IMG_EXTS
 
 logger = logging.getLogger(__name__)
 
+
 class TemplateSet:
     def __init__(self, directory: str):
         self.tmps = []

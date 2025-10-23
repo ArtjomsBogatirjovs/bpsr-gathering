@@ -26,7 +26,6 @@ class WaypointDB:
         return dx * dx + dy * dy
 
     def add_or_update(self, x: int, y: int, t: Optional[float] = None):
-        """Добавить новый узел либо слить с существующим, если близко."""
         if t is None:
             t = time.time()
         pos = (x, y)
@@ -39,7 +38,6 @@ class WaypointDB:
                 best_d2 = d2
                 best_i = i
         if best_i >= 0 and best_d2 <= r2:
-            # слить: берём среднее положение, обновляем время
             n = self.nodes[best_i]
             n.x = int((n.x + x) / 2)
             n.y = int((n.y + y) / 2)
@@ -48,9 +46,6 @@ class WaypointDB:
             self.nodes.append(Node(x=x, y=y, last_collected=t))
 
     def next_available(self, curx: int, cury: int, *, remove: bool = True) -> Optional[Node]:
-        """Выбрать ближайший узел, доступный по таймеру.
-        Если remove=True, узел сразу удаляется из списка, чтобы не зациклиться.
-        Он добавится заново при успешной добыче через add_or_update()."""
         now = time.time()
         best: Optional[Node] = None
         best_d2: float = float("inf")

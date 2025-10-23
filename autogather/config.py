@@ -17,9 +17,8 @@ IMG_EXTS = (".png", ".jpg", ".jpeg", ".bmp", ".webp")
 GAME_TITLE_KEYWORDS = ("blue", "protocol", "star", "resonance", "BPSR", "Blue", "Protocol", "Star", "Resonance",)
 REQUIRED_FOLDERS = ("focused", "gathering", "selector", "resource")
 
-
 RESOURCE_THRESHOLD = 0.8
-APPROACH_PAUSE     = 0.08
+APPROACH_PAUSE = 0.08
 
-NODE_MIN_REVISIT_SEC   = 30
-NODE_MERGE_RADIUS_PX   = 50
+NODE_MIN_REVISIT_SEC = 30
+NODE_MERGE_RADIUS_PX = 50

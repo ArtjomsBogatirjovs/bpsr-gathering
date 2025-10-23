@@ -14,7 +14,7 @@ from autogather.enums.resource import Resource, DEFAULT_TOLERANCE_X, DEFAULT_TOL
 from autogather.folder_utils import scan_resources, load_resource_dir
 from autogather.model.resource_model import ResourceObject
 from autogather.model.worker import Worker
-from autogather.screen import WindowScreen, _get_roi_f
+from autogather.screen import WindowScreen, _get_selector_rectangle
 from autogather.ui.ui_utils import _apply_style, _card, _github_icon, _palette
 from autogather.winutil import list_windows, bring_to_foreground
 
@@ -223,7 +223,7 @@ class App:
             self.screen = WindowScreen(hwnd)
 
         roi_val = PROMPT_ROI
-        roi, roi_tuple = _get_roi_f(self.screen, self.get_selected_aspect_ratio(), roi_val)
+        roi, roi_tuple = _get_selector_rectangle(self.screen, self.get_selected_aspect_ratio(), roi_val)
         save_roi_debug(self.screen.grab_bgr(), roi_tuple)
         self.status.set("Selector debug saved (roi_debug.png)")
 

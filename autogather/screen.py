@@ -33,25 +33,21 @@ class WindowScreen:
         return (right - left), (bottom - top)
 
 
-def roi_convert(roi: tuple[float, float, float, float], x_ratio: int, y_ratio: int) -> tuple[
+def aspect_ration_convert_from_16_9(roi: tuple[float, float, float, float], x_ratio: int, y_ratio: int) -> tuple[
     float, float, float, float]:
     x1, y1, x2, y2 = roi
 
     w_from, h_from = 16, 9
     w_to, h_to = x_ratio, y_ratio
 
-    # абсолютные "условные" координаты
     X1 = x1 * w_from
     X2 = x2 * w_from
 
-    # смещение (добавленное пространство слева)
     offset = (w_to - w_from) / 2
 
-    # нормализация в новую ширину
     x1_new = (X1 + offset) / w_to
     x2_new = (X2 + offset) / w_to
 
-    # высота: если одинаковая, не меняем
     if h_from == h_to:
         y1_new, y2_new = y1, y2
     else:
@@ -61,13 +57,13 @@ def roi_convert(roi: tuple[float, float, float, float], x_ratio: int, y_ratio: i
     return x1_new, y1_new, x2_new, y2_new
 
 
-def _get_roi_f(screen: WindowScreen, ratio: AspectRatio, roi_promt = PROMPT_ROI):
+def _get_selector_rectangle(screen: WindowScreen, ratio: AspectRatio, roi_promt = PROMPT_ROI):
     frame = screen.grab_bgr()
     if frame is None:
         return None
     gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
     H, W = gray.shape[:2]
-    x1_k, y1_k, x2_k, y2_k = roi_convert((roi_promt[0], roi_promt[1], roi_promt[2], roi_promt[3]), ratio.x, ratio.y)
+    x1_k, y1_k, x2_k, y2_k = aspect_ration_convert_from_16_9((roi_promt[0], roi_promt[1], roi_promt[2], roi_promt[3]), ratio.x, ratio.y)
     x1 = int(W * x1_k)
     y1 = int(H * y1_k)
     x2 = int(W *  x2_k)

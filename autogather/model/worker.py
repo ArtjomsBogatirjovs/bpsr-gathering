@@ -17,7 +17,7 @@ from autogather.model.navigator import Navigator, run
 from autogather.model.resource_model import ResourceObject
 from autogather.model.templates import TemplateSet
 from autogather.model.waypoints import WaypointDB
-from autogather.screen import _get_roi_f
+from autogather.screen import _get_selector_rectangle
 
 
 class Worker(threading.Thread):
@@ -172,7 +172,7 @@ class Worker(threading.Thread):
         while not aligned and steps < MAX_SCROLL_STEPS and not self._stop.is_set():
             self.state = f"scroll align {steps + 1}/{MAX_SCROLL_STEPS}"
             scroll_once(SCROLL_UNIT)
-            roi, _ = _get_roi_f(self.screen, self.ratio)
+            roi, _ = _get_selector_rectangle(self.screen, self.ratio)
             if roi is None:
                 break
             hit_f = self.get_ts_best_match(roi, self.ts_focus)
@@ -195,7 +195,7 @@ class Worker(threading.Thread):
         return template_set.best_match(roi, SCALES, MATCH_THRESHOLD)
 
     def _has_any_prompt(self):
-        roi, _ = _get_roi_f(self.screen, self.ratio)
+        roi, _ = _get_selector_rectangle(self.screen, self.ratio)
         if roi is None:
             return False
         hit_f = self.get_ts_best_match(roi, self.ts_focus)

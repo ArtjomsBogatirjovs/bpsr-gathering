@@ -1,6 +1,4 @@
-# Минимальные утилиты WinAPI: перечисление окон, титулы, геометрия, поднять в фокус
 import ctypes as ct
-import logging
 from ctypes import wintypes as wt
 
 user32 = ct.WinDLL("user32", use_last_error=True)
@@ -77,7 +75,6 @@ def get_window_rect(hwnd: int):
 
 
 def bring_to_foreground(hwnd: int):
-    """Восстановить (если свернуто) и поднять окно в фореграунд."""
     user32.ShowWindow(hwnd, SW_RESTORE)
     fg = user32.GetForegroundWindow()
     if fg == hwnd:
@@ -93,6 +90,3 @@ def bring_to_foreground(hwnd: int):
     else:
         user32.SetForegroundWindow(hwnd)
     user32.SetFocus(hwnd)
-
-
-logger = logging.getLogger(__name__)
