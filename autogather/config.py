@@ -22,3 +22,13 @@ APPROACH_PAUSE = 0.08
 
 NODE_MIN_REVISIT_SEC = 30
 NODE_MERGE_RADIUS_PX = 50
+
+PRESET_ASPECT_RATIO = "aspect_ratio"
+PRESET_MULT_X = "mult_x"
+PRESET_MULT_Y = "mult_y"
+PRESET_TOL_X = "tol_x"
+PRESET_TOL_Y = "tol_y"
+PRESET_WANT_GATHERING = "want_gathering"
+PRESET_DONT_MOVE = "dont_move"
+PRESET_MOVE_BACK_TO_START = "move_back_to_start"
+PRESET_SPEED = "gathering_speed"

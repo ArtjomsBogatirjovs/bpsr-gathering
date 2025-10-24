@@ -51,3 +51,16 @@ class Resource(Enum):
     @property
     def is_focus_needed(self) -> bool:
         return self._is_focus_needed
+
+    def to_json(self) -> dict:
+        return {
+            "folder": self._folder,
+            "mult_x": self._mult_x,
+            "mult_y": self._mult_y,
+            "tol_x": self._tol_x,
+            "tol_y": self._tol_y,
+            "want_gathering": True,
+            "dont_move": False,
+            "move_back_to_start": False,
+            "gathering_speed": "FAST"
+        }

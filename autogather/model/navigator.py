@@ -38,7 +38,7 @@ class Navigator:
         if a > 2250: return value * 0.70
         if a > 1750: return value * 0.64
         if a > 1500: return value * 0.6
-        if a > 1250: return value * 0.72
+        if a > 1250: return value * 0.73
         if a > 1000: return value * 0.8
         if a > 750:  return value * 0.74
         if a > 500:  return value * 0.7

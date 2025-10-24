@@ -6,7 +6,7 @@ import cv2
 logger = logging.getLogger(__name__)
 
 
-def save_roi_debug(frame, roi_coords, filename="selector_rectangle.png"):
+def save_selector_debug(frame, roi_coords, filename="selector_rectangle.png"):
     (x1, y1, x2, y2) = roi_coords
     dbg = frame.copy()
     cv2.rectangle(dbg, (x1, y1), (x2, y2), (0, 255, 0), 2)

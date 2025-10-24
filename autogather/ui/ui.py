@@ -1,17 +1,20 @@
 # autogather/ui.py
+import json
 import logging
 import os
+import time
 import tkinter as tk
 import webbrowser
 from tkinter import ttk, messagebox
 from typing import Optional, Tuple, List
 
-from autogather.config import PROMPT_ROI
-from autogather.debug import save_roi_debug
+from autogather.config import PROMPT_ROI, PRESET_ASPECT_RATIO, PRESET_SPEED, PRESET_DONT_MOVE, PRESET_WANT_GATHERING, \
+    PRESET_TOL_X, PRESET_MULT_Y, PRESET_MULT_X, PRESET_TOL_Y, PRESET_MOVE_BACK_TO_START
+from autogather.debug import save_selector_debug
 from autogather.enums.aspect_ratio import AspectRatio
 from autogather.enums.gathering_speed import GatheringSpeedLevel
-from autogather.enums.resource import Resource, DEFAULT_TOLERANCE_X, DEFAULT_TOLERANCE_Y
-from autogather.folder_utils import scan_resources, load_resource_dir
+from autogather.enums.resource import Resource
+from autogather.folder_utils import scan_resources, load_resource_dir, _presets_path
 from autogather.model.resource_model import ResourceObject
 from autogather.model.worker import Worker
 from autogather.screen import WindowScreen, _get_selector_rectangle
@@ -53,7 +56,7 @@ class App:
         self.tol_y = tk.IntVar(value=0)
         self._updating_fields = False
 
-        self.aspect_ratio = tk.StringVar(value=str(AspectRatio.RATIO_21_9))
+        self.aspect_ratio = tk.StringVar(value=str(AspectRatio.from_preset()))
         self.gathering_speed = tk.StringVar(value=GatheringSpeedLevel.FAST.name)
         self.move_back_to_start = tk.BooleanVar(value=False)
         self.dont_move = tk.BooleanVar(value=False)
@@ -203,6 +206,9 @@ class App:
         self.btn_stop = ttk.Button(footer, text="■ Stop", command=self.stop, state="disabled", width=10)
         self.btn_stop.grid(row=0, column=1, sticky="w", padx=(0, 12))
 
+        self.btn_save = ttk.Button(footer, text="💾 Save preset", command=self._save_preset, width=14)
+        self.btn_save.grid(row=0, column=2, sticky="w")
+
         # Status
         ttk.Label(footer, textvariable=self.status, style="Status.TLabel") \
             .grid(row=0, column=2, sticky="e")
@@ -224,18 +230,14 @@ class App:
 
         roi_val = PROMPT_ROI
         roi, roi_tuple = _get_selector_rectangle(self.screen, self.get_selected_aspect_ratio(), roi_val)
-        save_roi_debug(self.screen.grab_bgr(), roi_tuple)
+        save_selector_debug(self.screen.grab_bgr(), roi_tuple)
         self.status.set("Selector debug saved (roi_debug.png)")
 
     def get_gathering_speed(self) -> GatheringSpeedLevel:
         return GatheringSpeedLevel[self.gathering_speed.get()]
 
     def get_selected_aspect_ratio(self) -> AspectRatio:
-        value = self.aspect_ratio.get()
-        for ratio in AspectRatio:
-            if str(ratio) == value:
-                return ratio
-        raise ValueError(f"Unknown aspect ratio: {value}")
+        return AspectRatio.get_ratio(self.aspect_ratio.get())
 
     def rescan(self):
         _resources = scan_resources()
@@ -354,10 +356,75 @@ class App:
         self.resource = res
         if not res:
             return
+        preset_path = _presets_path()
+        resource_dict = None
         try:
-            self.mult_x.set(res.get_mult_x() if hasattr(res, "get_mult_x") else getattr(res, "mult_x", 1.0))
-            self.mult_y.set(res.get_mult_y() if hasattr(res, "get_mult_y") else getattr(res, "mult_y", 1.0))
-            self.tol_x.set(res.get_tol_x() if hasattr(res, "get_tol_x") else getattr(res, "tol_x", DEFAULT_TOLERANCE_X))
-            self.tol_y.set(res.get_tol_y() if hasattr(res, "get_tol_y") else getattr(res, "tol_y", DEFAULT_TOLERANCE_Y))
+            if os.path.exists(preset_path):
+                with open(preset_path, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                    resource_dict = data.get(res.folder_name)
+            if not resource_dict:
+                self.mult_x.set(res.get_mult_x())
+                self.mult_y.set(res.get_mult_y())
+                self.tol_x.set(res.get_tol_x())
+                self.tol_y.set(res.get_tol_y())
+            else:
+                self.mult_x.set(resource_dict.get(PRESET_MULT_X, res.get_mult_x()))
+                self.mult_y.set(resource_dict.get(PRESET_MULT_Y, res.get_mult_y()))
+                self.tol_x.set(resource_dict.get(PRESET_TOL_X, res.get_tol_x()))
+                self.tol_y.set(resource_dict.get(PRESET_TOL_Y, res.get_tol_y()))
+                self.want_gathering.set(resource_dict.get(PRESET_WANT_GATHERING, res.is_focus_needed))
+                self.gathering_speed.set(resource_dict.get(PRESET_SPEED, GatheringSpeedLevel.FAST.name))
+                self.move_back_to_start.set(resource_dict.get(PRESET_MOVE_BACK_TO_START, False))
+                self.dont_move.set(resource_dict.get(PRESET_DONT_MOVE, False))
         except Exception as e:
             print(f"Error: {e}")
+
+    def _resource_key(self):
+        name = self._selected_name.get().strip()
+        res: Resource = self._name_to_res.get(name)
+        if res is None:
+            return None
+        return res.folder_name
+
+    def _collect_current_settings(self) -> dict:
+        return {
+            PRESET_MULT_X: float(self.mult_x.get()),
+            PRESET_MULT_Y: float(self.mult_y.get()),
+            PRESET_TOL_X: int(self.tol_x.get()),
+            PRESET_TOL_Y: int(self.tol_y.get()),
+            PRESET_WANT_GATHERING: bool(self.want_gathering.get()),
+            PRESET_DONT_MOVE: bool(self.dont_move.get()),
+            PRESET_MOVE_BACK_TO_START: bool(self.move_back_to_start.get()),
+            PRESET_SPEED: self.gathering_speed.get(),
+        }
+
+    def _save_preset(self):
+        key = self._resource_key()
+        if not key:
+            messagebox.showerror("No resource", "Select a resource first.")
+            return
+
+        path = _presets_path()
+        data = {}
+        if os.path.exists(path):
+            try:
+                with open(path, "r", encoding="utf-8") as f:
+                    data = json.load(f) or {}
+            except Exception:
+                data = {}
+        else:
+            for res in Resource:
+                data[res.folder_name] = res.to_json()
+
+        data[key] = self._collect_current_settings()
+
+        data[PRESET_ASPECT_RATIO] = self.aspect_ratio.get()
+        data["_updated_at"] = time.strftime("%Y-%m-%d %H:%M:%S")
+
+        try:
+            with open(path, "w", encoding="utf-8") as f:
+                json.dump(data, f, ensure_ascii=False, indent=2)
+            self.status.set(f"Preset saved for '{key}' → {os.path.basename(path)}")
+        except Exception as e:
+            messagebox.showerror("Save error", str(e))

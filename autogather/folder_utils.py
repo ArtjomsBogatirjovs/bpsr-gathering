@@ -62,3 +62,7 @@ def _pick_subdir(resource_dir: str, *alts):
         if a in names:
             return names[a]
     return None
+
+def _presets_path() -> str:
+    project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+    return os.path.join(project_root, "presets.json")
