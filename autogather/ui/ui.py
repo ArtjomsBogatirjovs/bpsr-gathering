@@ -9,9 +9,11 @@ from tkinter import ttk, messagebox
 from typing import Optional, Tuple, List
 
 from autogather.config import PROMPT_ROI, PRESET_ASPECT_RATIO, PRESET_SPEED, PRESET_DONT_MOVE, PRESET_WANT_GATHERING, \
-    PRESET_TOL_X, PRESET_MULT_Y, PRESET_MULT_X, PRESET_TOL_Y, PRESET_MOVE_BACK_TO_START
+    PRESET_TOL_X, PRESET_MULT_Y, PRESET_MULT_X, PRESET_TOL_Y, PRESET_MOVE_BACK_TO_START, PRESET_ADJUST_DIRECTION, \
+    PRESET_ADJUST_EVERY_CYCLE
 from autogather.debug import save_selector_debug
 from autogather.enums.aspect_ratio import AspectRatio
+from autogather.enums.direction import Direction
 from autogather.enums.gathering_speed import GatheringSpeedLevel
 from autogather.enums.resource import Resource
 from autogather.folder_utils import scan_resources, load_resource_dir, _presets_path
@@ -60,6 +62,8 @@ class App:
         self.gathering_speed = tk.StringVar(value=GatheringSpeedLevel.FAST.name)
         self.move_back_to_start = tk.BooleanVar(value=False)
         self.dont_move = tk.BooleanVar(value=False)
+        self.adjust_every_cycle = tk.BooleanVar(value=False)
+        self.adjust_dir = tk.StringVar(value=Direction.NONE.name)
 
         self._build_ui()
 
@@ -142,6 +146,37 @@ class App:
                         text="Run back to start after gathering",
                         variable=self.move_back_to_start) \
             .grid(row=3, column=0, columnspan=4, sticky="w", pady=(2, 0))
+
+        # Adjust every cycle (visible only if move_back_to_start)
+        self.chk_adjust = ttk.Checkbutton(
+            resource_card, style="Card.TCheckbutton",
+            text="Adjust every cycle", variable=self.adjust_every_cycle
+        )
+        self.chk_adjust.grid(row=4, column=0, sticky="w", pady=(2, 0))
+
+        self.lbl_dir = ttk.Label(resource_card, text="Direction:", style="Card.TLabel")
+        self.lbl_dir.grid(row=4, column=1, sticky="w", padx=(8, 4), pady=(2, 0))
+
+        self.dir_cmb = ttk.Combobox(
+            resource_card, style="Drop.TCombobox",
+            state="readonly", width=8, textvariable=self.adjust_dir,
+            values=[Direction.NONE.name, Direction.UP.name, Direction.DOWN.name, Direction.LEFT.name,
+                    Direction.RIGHT.name]
+        )
+        self.dir_cmb.grid(row=4, column=2, sticky="w", pady=(2, 0))
+
+        def _sync_adjust_ui():
+            if self.move_back_to_start.get():
+                self.chk_adjust.grid()
+                self.lbl_dir.grid()
+                self.dir_cmb.grid()
+            else:
+                self.chk_adjust.grid_remove()
+                self.lbl_dir.grid_remove()
+                self.dir_cmb.grid_remove()
+
+        self.move_back_to_start.trace_add("write", lambda *_: _sync_adjust_ui())
+        _sync_adjust_ui()
 
         # params
         params_card = _card(shell, row=2, column=0, sticky="nsew", pady=(GUT, 0), padx=(0, GUT))
@@ -235,6 +270,9 @@ class App:
 
     def get_gathering_speed(self) -> GatheringSpeedLevel:
         return GatheringSpeedLevel[self.gathering_speed.get()]
+
+    def get_direction(self) -> Direction:
+        return Direction[self.adjust_dir.get()]
 
     def get_selected_aspect_ratio(self) -> AspectRatio:
         return AspectRatio.get_ratio(self.aspect_ratio.get())
@@ -335,7 +373,8 @@ class App:
 
     def create_resource(self):
         return ResourceObject(self.resource.folder_name, self.mult_x.get(), self.mult_y.get(), self.tol_x.get(),
-                              self.tol_y.get(), self.resource.is_focus_needed)
+                              self.tol_y.get(), self.resource.is_focus_needed, self.adjust_every_cycle.get(),
+                              self.get_direction())
 
     def stop(self):
         if self.worker:
@@ -369,6 +408,7 @@ class App:
                 self.tol_x.set(res.get_tol_x())
                 self.tol_y.set(res.get_tol_y())
             else:
+                adjust_dir = resource_dict.get(PRESET_ADJUST_DIRECTION, Direction.NONE.name)
                 self.mult_x.set(resource_dict.get(PRESET_MULT_X, res.get_mult_x()))
                 self.mult_y.set(resource_dict.get(PRESET_MULT_Y, res.get_mult_y()))
                 self.tol_x.set(resource_dict.get(PRESET_TOL_X, res.get_tol_x()))
@@ -377,6 +417,8 @@ class App:
                 self.gathering_speed.set(resource_dict.get(PRESET_SPEED, GatheringSpeedLevel.FAST.name))
                 self.move_back_to_start.set(resource_dict.get(PRESET_MOVE_BACK_TO_START, False))
                 self.dont_move.set(resource_dict.get(PRESET_DONT_MOVE, False))
+                self.adjust_dir.set(adjust_dir)
+                self.adjust_every_cycle.set(resource_dict.get(PRESET_ADJUST_EVERY_CYCLE, False))
         except Exception as e:
             print(f"Error: {e}")
 
@@ -397,6 +439,8 @@ class App:
             PRESET_DONT_MOVE: bool(self.dont_move.get()),
             PRESET_MOVE_BACK_TO_START: bool(self.move_back_to_start.get()),
             PRESET_SPEED: self.gathering_speed.get(),
+            PRESET_ADJUST_DIRECTION: self.adjust_dir.get(),
+            PRESET_ADJUST_EVERY_CYCLE: self.adjust_every_cycle.get(),
         }
 
     def _save_preset(self):

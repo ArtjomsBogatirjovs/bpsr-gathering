@@ -1,7 +1,8 @@
 from enum import Enum
 
-DEFAULT_TOLERANCE_Y = 150
-DEFAULT_TOLERANCE_X = 150
+DEFAULT_TOLERANCE_Y = 175
+DEFAULT_TOLERANCE_X = 200
+
 
 class Resource(Enum):
     BARU_RICH_ORE = ("baru_rich_ore", 1, 1, 200, 250, True)
@@ -17,6 +18,7 @@ class Resource(Enum):
     SWEET_BERRY = ("sweet_berry", 1, 1, DEFAULT_TOLERANCE_X, DEFAULT_TOLERANCE_Y, True)
     THIN_TWIG = ("thin_twig", 1, 1, DEFAULT_TOLERANCE_X, DEFAULT_TOLERANCE_Y, True)
     WHEAT = ("wheat", 1, 1, DEFAULT_TOLERANCE_X, DEFAULT_TOLERANCE_Y, True)
+    SLATE = ("slate", 1, 1, DEFAULT_TOLERANCE_X, DEFAULT_TOLERANCE_Y, False)
 
     def __init__(self, folder: str, mult_x: float, mult_y: float,
                  tol_x: int, tol_y: int, is_focus_needed: bool = True):

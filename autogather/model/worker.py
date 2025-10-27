@@ -66,16 +66,18 @@ class Worker(threading.Thread):
             # 1) Measure resource offset:
             hit_obj, dx, dy = self._measure_resource_offset()
             if hit_obj:
-                self.nav.approach_by_distance(dx, dy)
+                self.nav.approach_by_distance(dx, dy, False)
                 self.check_f_and_perform()
                 time.sleep(1)
 
     def _move_to_start(self):
         is_on_start = self.nav.is_start_position()
-        self.nav.approach_by_distance(self.nav.pos_x * -1, self.nav.pos_y * -1)
+        self.nav.approach_by_distance(self.nav.pos_x * -1, 0)
+        self.nav.approach_by_distance(0, self.nav.pos_y * -1)
         self.check_f_and_perform()
-        if not is_on_start:
-            run(False, -1)
+        if self.res.is_adjust_every_cycle() and not is_on_start:
+            adjust_dir = self.res.get_adjust_dir()
+            run(adjust_dir.is_x(), adjust_dir.get_step())
 
     # ---- helpers ----
     def stop(self):

@@ -34,7 +34,7 @@ class Navigator:
 
     def _calc_adjustment_x(self, value: float) -> float:
         a = abs(value)
-        if a > 2500: return value * 0.72
+        if a > 2500: return value * 0.73
         if a > 2250: return value * 0.70
         if a > 1750: return value * 0.64
         if a > 1500: return value * 0.6
@@ -53,7 +53,7 @@ class Navigator:
         if a > 1500: return value * 0.6
         if a > 1250: return value * 0.72
         if a > 1000: return value * 0.8
-        if a > 750:  return value * 0.74
+        if a > 750:  return value * 0.7
         if a > 500:  return value * 0.7
         if a > 250:  return value * 0.7
         return 0.0
@@ -68,16 +68,17 @@ class Navigator:
 
         return (dx + dx_adj) * self.resource.mult_x, (dy + dy_adj) * self.resource.mult_y
 
-    def approach_by_distance(self, dx: int, dy: int):
+    def approach_by_distance(self, dx: int, dy: int, tolerated: bool = True):
         if dx == 0 and dy == 0:
             return
-        dx_tolerated = dx - self.resource.get_tol_x() if dx > 0 else dx + self.resource.get_tol_x()
-        dy_tolerated = dy - self.resource.get_tol_y() if dy > 0 else dy + self.resource.get_tol_y()
+        if not tolerated:
+            dx = dx - self.resource.get_tol_x() if dx > 0 else dx + self.resource.get_tol_x()
+            dy = dy - self.resource.get_tol_y() if dy > 0 else dy + self.resource.get_tol_y()
 
         dy_step = 0
         dx_step = 0
 
-        dx_in_ms, dy_in_ms = self.get_dx_dy(dx_tolerated, dy_tolerated)
+        dx_in_ms, dy_in_ms = self.get_dx_dy(dx, dy)
         # Y axis
         if abs(dy) > self.resource.get_tol_y():
             run(False, dy_in_ms)

@@ -1,3 +1,6 @@
+from autogather.enums.direction import Direction
+
+
 class ResourceObject:
     def __init__(
             self,
@@ -7,6 +10,8 @@ class ResourceObject:
             tol_x: int,
             tol_y: int,
             is_focus_needed: bool = True,
+            adjust_every_cycle: bool = False,
+            adjust_dir: Direction = Direction.NONE
     ):
         self.folder = folder
         self.mult_x = mult_x
@@ -14,6 +19,8 @@ class ResourceObject:
         self.tol_x = tol_x
         self.tol_y = tol_y
         self.is_focus_needed = is_focus_needed
+        self.adjust_dir = adjust_dir
+        self.adjust_every_cycle = adjust_every_cycle
         print("[Resource] Created:", self)
 
     @property
@@ -32,6 +39,12 @@ class ResourceObject:
 
     def get_tol_y(self) -> int:
         return self.tol_y
+
+    def is_adjust_every_cycle(self) -> bool:
+        return self.adjust_every_cycle
+
+    def get_adjust_dir(self) -> Direction:
+        return self.adjust_dir
 
     def __repr__(self):
         return (
