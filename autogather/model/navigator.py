@@ -43,7 +43,7 @@ class Navigator:
         if a > 750:  return value * 0.74
         if a > 500:  return value * 0.7
         if a > 250:  return value * 0.7
-        return 0.0
+        return value * -0.9
 
     def _calc_adjustment_y(self, value: float) -> float:
         a = abs(value)
@@ -56,7 +56,7 @@ class Navigator:
         if a > 750:  return value * 0.7
         if a > 500:  return value * 0.7
         if a > 250:  return value * 0.7
-        return 0.0
+        return value * -0.7
 
     def get_dx_dy(self, dx, dy):
         dx_adj = self._calc_adjustment_x(dx)

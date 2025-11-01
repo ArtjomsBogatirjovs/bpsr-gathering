@@ -19,6 +19,8 @@ class Resource(Enum):
     THIN_TWIG = ("thin_twig", 1, 1, DEFAULT_TOLERANCE_X, DEFAULT_TOLERANCE_Y, True)
     WHEAT = ("wheat", 1, 1, DEFAULT_TOLERANCE_X, DEFAULT_TOLERANCE_Y, True)
     SLATE = ("slate", 1, 1, DEFAULT_TOLERANCE_X, DEFAULT_TOLERANCE_Y, False)
+    BARU_PURE_ORE = ("baru_pure_ore", 1, 1, DEFAULT_TOLERANCE_X, DEFAULT_TOLERANCE_Y, True)
+    GLOWING_MUSHROOM = ("glowing_mushroom", 1, 1, DEFAULT_TOLERANCE_X, DEFAULT_TOLERANCE_Y, True)
 
     def __init__(self, folder: str, mult_x: float, mult_y: float,
                  tol_x: int, tol_y: int, is_focus_needed: bool = True):

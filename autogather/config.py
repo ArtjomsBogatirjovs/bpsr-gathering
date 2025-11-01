@@ -10,7 +10,7 @@ ALIGN_TOLERANCE = 16
 
 SCROLL_UNIT = -120
 SCROLL_DELAY = 0.25
-MAX_SCROLL_STEPS = 5
+MAX_SCROLL_STEPS = 3
 
 IMG_EXTS = (".png", ".jpg", ".jpeg", ".bmp", ".webp")
 

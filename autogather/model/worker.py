@@ -43,6 +43,7 @@ class Worker(threading.Thread):
 
         self.ratio = ratio
         self.res = resource
+        self.align_failed =False
 
     # ---- main loop ----
     def run(self):
@@ -165,7 +166,8 @@ class Worker(threading.Thread):
 
         hit_button_f = (hit_g and hit_s and self._selector_on_gathering(hit_f, hit_g,
                                                                         hit_s)) or not self.want_gathering or not self.res.is_focus_needed
-        if hit_button_f:
+        if hit_button_f or self.align_failed and self.want_gathering:
+            self.align_failed = False
             self.press_f_key()
             return True
 
@@ -185,10 +187,12 @@ class Worker(threading.Thread):
 
         if aligned:
             self.press_f_key()
+            self.align_failed = False
             return True
         else:
+            self.align_failed = True
             self.state = "align failed"
-            time.sleep(0.12)
+            time.sleep(0.2)
             return True
 
     def get_ts_best_match(self, roi, template_set: TemplateSet):
